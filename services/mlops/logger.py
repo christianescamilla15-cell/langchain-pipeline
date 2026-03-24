@@ -1,6 +1,6 @@
 """Structured logging for LLM operations."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 
@@ -9,7 +9,7 @@ class LogEntry:
     level: str
     service: str
     message: str
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: dict = field(default_factory=dict)
 
 
@@ -70,4 +70,4 @@ class StructuredLogger:
 
     def clear(self):
         self._logs.clear()
-        StructuredLogger._instance = None
+        # DON'T set _instance = None — that breaks held references

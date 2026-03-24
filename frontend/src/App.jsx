@@ -401,10 +401,10 @@ export default function App() {
       setTimeout(() => {
         setEvents(prev => [{
           ...evt,
-          timestamp: new Date(baseTime + i * 500).toISOString(),
+          timestamp: new Date(baseTime + i * 1000).toISOString(),
           id: `evt-${baseTime + i}`
         }, ...prev].slice(0, 50))
-      }, i * 500)
+      }, i * 1000)
     })
 
     // Add metrics

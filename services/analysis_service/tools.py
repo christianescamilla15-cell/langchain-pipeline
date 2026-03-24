@@ -18,7 +18,7 @@ def extract_keywords(text: str) -> str:
     words = re.findall(r"\b[a-zA-Z]{3,}\b", text.lower())
     filtered = [w for w in words if w not in stop_words]
     counts = Counter(filtered).most_common(10)
-    return str([{"keyword": w, "count": c} for w, c in counts])
+    return json.dumps([{"keyword": w, "count": c} for w, c in counts])
 
 
 @tool
@@ -41,7 +41,7 @@ def detect_risk_terms(text: str) -> str:
     for pattern, message in risk_patterns.items():
         if pattern in text_lower:
             found.append({"term": pattern, "flag": message})
-    return str(found) if found else "No risk terms detected"
+    return json.dumps(found) if found else "No risk terms detected"
 
 
 @tool
@@ -71,7 +71,7 @@ def count_sections(text: str) -> str:
     paragraphs = len([p for p in text.split("\n\n") if p.strip()])
     sentences = len(re.split(r"[.!?]+", text))
     words = len(text.split())
-    return str({"paragraphs": paragraphs, "sentences": sentences, "words": words})
+    return json.dumps({"paragraphs": paragraphs, "sentences": sentences, "words": words})
 
 
 @tool

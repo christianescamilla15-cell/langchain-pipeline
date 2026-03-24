@@ -39,6 +39,32 @@ def create_analysis_chain(llm):
     return extract_chain, quality_chain, report_chain
 
 
+def create_chains_from_registry(llm, registry):
+    """Create chains using templates from the prompt registry."""
+    extract_tmpl = registry.get_active("extract_analysis")
+    quality_tmpl = registry.get_active("quality_review")
+    report_tmpl = registry.get_active("final_report")
+
+    if extract_tmpl and quality_tmpl and report_tmpl:
+        ext_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a senior document analyst."),
+            ("human", extract_tmpl.template)
+        ])
+        qual_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a quality reviewer."),
+            ("human", quality_tmpl.template)
+        ])
+        rep_prompt = ChatPromptTemplate.from_template(report_tmpl.template)
+
+        return (
+            ext_prompt | llm | JsonOutputParser(),
+            qual_prompt | llm | JsonOutputParser(),
+            rep_prompt | llm | StrOutputParser(),
+        )
+    # Fallback to hardcoded prompts
+    return create_analysis_chain(llm)
+
+
 def create_simple_chain(llm):
     """Create a simple chain for quick analysis."""
     prompt = ChatPromptTemplate.from_template(

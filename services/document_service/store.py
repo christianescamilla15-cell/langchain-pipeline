@@ -1,5 +1,5 @@
 """In-memory document store."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import uuid
 
@@ -12,7 +12,7 @@ class DocumentStore:
 
     def create(self, title: str, content: str, doc_type: str = "general") -> dict:
         doc_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         doc = {
             "id": doc_id,
             "title": title,
@@ -40,7 +40,7 @@ class DocumentStore:
                 doc[k] = v
         if "content" in fields and fields["content"] is not None:
             doc["word_count"] = len(fields["content"].split())
-        doc["updated_at"] = datetime.utcnow().isoformat()
+        doc["updated_at"] = datetime.now(timezone.utc).isoformat()
         return doc
 
     def delete(self, doc_id: str) -> bool:

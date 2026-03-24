@@ -3,21 +3,29 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import json
 
-from .chains import create_analysis_chain, create_simple_chain, create_agent_chain, create_composed_chain
+from .chains import create_analysis_chain, create_simple_chain, create_agent_chain, create_composed_chain, create_chains_from_registry
 from .tools import extract_keywords, detect_risk_terms, analyze_sentiment_basic, count_sections, ANALYSIS_TOOLS
 from .bedrock_client import get_llm
 from .events import publish_analysis_completed, subscribe_to_documents
 from .rag import get_vector_store
 from services.mlops.metrics import MetricsTracker
+from services.mlops import StructuredLogger
 
 app = FastAPI(title="Analysis Service", version="1.0.0")
 metrics = MetricsTracker()
+logger = StructuredLogger()
 _analyses: dict[str, dict] = {}
+_prompt_registry = None
+
+
+def set_prompt_registry(registry):
+    global _prompt_registry
+    _prompt_registry = registry
 
 
 class AnalyzeRequest(BaseModel):
     document_id: str = Field(default="direct")
-    content: str = Field(..., min_length=10)
+    content: str = Field(..., min_length=10, max_length=100000)
     mode: str = Field(default="full", description="full or quick")
 
 
@@ -48,38 +56,62 @@ async def analyze_document(body: AnalyzeRequest):
             "mode": "quick",
         }
     else:
-        # Try agent first, fallback to manual chains
-        agent_executor = create_agent_chain(llm, ANALYSIS_TOOLS)
-        agent_used = False
+        try:
+            # Try agent first, fallback to manual chains
+            agent_executor = create_agent_chain(llm, ANALYSIS_TOOLS)
+            agent_used = False
 
-        if agent_executor:
-            try:
-                agent_result = agent_executor.invoke({"document": body.content})
-                # Parse agent output
-                agent_output = agent_result.get("output", "")
+            if agent_executor:
                 try:
-                    analysis = json.loads(agent_output)
-                except (json.JSONDecodeError, TypeError):
-                    analysis = {"summary": agent_output, "key_topics": [], "sentiment": "neutral", "risk_level": "low", "action_items": []}
-                agent_used = True
-            except Exception:
-                agent_used = False
+                    agent_result = agent_executor.invoke({"document": body.content})
+                    # Parse agent output
+                    agent_output = agent_result.get("output", "")
+                    try:
+                        analysis = json.loads(agent_output)
+                    except (json.JSONDecodeError, TypeError):
+                        analysis = {"summary": agent_output, "key_topics": [], "sentiment": "neutral", "risk_level": "low", "action_items": []}
+                    agent_used = True
+                except Exception:
+                    agent_used = False
 
-        if not agent_used:
-            # Fallback to manual chains
-            extract_chain, quality_chain, report_chain = create_analysis_chain(llm)
+            if not agent_used:
+                # Fallback to manual chains — try registry prompts first
+                if _prompt_registry:
+                    chains = create_chains_from_registry(llm, _prompt_registry)
+                else:
+                    chains = create_analysis_chain(llm)
+                extract_chain, quality_chain, report_chain = chains
 
-            # Step 1: Extract & analyze
-            analysis = extract_chain.invoke({"document": body.content})
+                # Step 1: Extract & analyze
+                analysis = extract_chain.invoke({"document": body.content})
 
-        # Step 2: Quality review (always run)
-        _, quality_chain, report_chain = create_analysis_chain(llm)
-        analysis_str = json.dumps(analysis) if isinstance(analysis, dict) else analysis
-        quality = quality_chain.invoke({"analysis": analysis_str})
+            # Step 2: Quality review (always run)
+            if _prompt_registry:
+                chains = create_chains_from_registry(llm, _prompt_registry)
+            else:
+                chains = create_analysis_chain(llm)
+            _, quality_chain, report_chain = chains
+            analysis_str = json.dumps(analysis) if isinstance(analysis, dict) else analysis
+            quality = quality_chain.invoke({"analysis": analysis_str})
 
-        # Step 3: Final report
-        quality_str = json.dumps(quality)
-        report = report_chain.invoke({"analysis": analysis_str, "review": quality_str})
+            # Step 3: Final report
+            quality_str = json.dumps(quality)
+            report = report_chain.invoke({"analysis": analysis_str, "review": quality_str})
+
+        except Exception as e:
+            logger.error("analysis_service", f"Chain failed: {str(e)}")
+            metrics.record("analysis_errors", 1.0)
+            # Fallback to tool-only analysis
+            analysis = {
+                "summary": "LLM chain failed, using tool-only analysis",
+                "key_topics": [],
+                "sentiment": tool_results.get("sentiment", "neutral"),
+                "risk_level": "unknown",
+                "action_items": ["Review document manually"],
+            }
+            quality = {"score": 0, "improvements": ["LLM chain was unavailable"]}
+            report = "Tool-only analysis — LLM chain failed"
+            agent_used = False
 
         # Track metrics
         if isinstance(quality, dict) and "score" in quality:
@@ -124,7 +156,6 @@ async def get_analysis(doc_id: str):
 async def _handle_document_created(event):
     """Auto-analyze documents when created."""
     payload = event.payload
-    llm = get_llm()
     content = payload.get("content", "")
     doc_id = payload.get("document_id", "unknown")
 

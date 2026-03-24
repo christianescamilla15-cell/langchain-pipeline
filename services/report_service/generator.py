@@ -1,13 +1,14 @@
 """Report generation from analysis results."""
-from datetime import datetime
+from datetime import datetime, timezone
 import json
+import uuid
 
 
 class ReportGenerator:
     """Generate formatted reports from analysis results."""
 
     def generate(self, document_id: str, analysis: dict) -> dict:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         # Extract info from analysis
         if "analysis" in analysis and isinstance(analysis["analysis"], dict):
@@ -30,7 +31,7 @@ class ReportGenerator:
         risk_terms = tools.get("risk_terms", "No risk terms detected")
 
         report = {
-            "report_id": f"rpt-{document_id[:8]}",
+            "report_id": f"rpt-{uuid.uuid4().hex[:12]}",
             "document_id": document_id,
             "generated_at": now,
             "title": f"Analysis Report - {document_id[:8]}",

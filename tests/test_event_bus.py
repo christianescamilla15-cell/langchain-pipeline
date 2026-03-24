@@ -80,9 +80,11 @@ class TestEventBus:
         bus = EventBus()
         bus.subscribe("x", lambda e: None)
         bus.clear()
-        # After clear, singleton is reset
+        # After clear, singleton is preserved but data is cleared
         bus2 = EventBus()
-        assert bus2 is not bus
+        assert bus2 is bus
+        assert len(bus.get_log()) == 0
+        assert len(bus._subscribers) == 0
 
     @pytest.mark.asyncio
     async def test_event_has_id_and_timestamp(self):

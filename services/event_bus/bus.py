@@ -1,7 +1,8 @@
 """In-memory event bus simulating Redis pub/sub for microservice communication."""
 import asyncio
+import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Any
 from collections import defaultdict
 import json
@@ -11,8 +12,8 @@ import json
 class Event:
     topic: str
     payload: dict
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-    event_id: str = field(default_factory=lambda: f"evt-{id(object()):x}")
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    event_id: str = field(default_factory=lambda: f"evt-{uuid.uuid4().hex[:12]}")
 
 
 class EventBus:
@@ -52,4 +53,4 @@ class EventBus:
     def clear(self):
         self._subscribers.clear()
         self._event_log.clear()
-        EventBus._instance = None
+        # DON'T set _instance = None — that breaks held references

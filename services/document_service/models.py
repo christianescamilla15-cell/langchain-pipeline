@@ -6,7 +6,7 @@ from typing import Optional
 
 class DocumentCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
-    content: str = Field(..., min_length=10)
+    content: str = Field(..., min_length=10, max_length=100000)
     doc_type: str = Field(default="general")
 
     @field_validator("doc_type")
@@ -20,7 +20,7 @@ class DocumentCreate(BaseModel):
 
 class DocumentUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
-    content: Optional[str] = Field(None, min_length=10)
+    content: Optional[str] = Field(None, min_length=10, max_length=100000)
     doc_type: Optional[str] = None
 
     @field_validator("doc_type")

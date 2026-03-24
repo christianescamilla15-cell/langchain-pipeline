@@ -1,6 +1,6 @@
 """Quality metrics tracking for LLMOps monitoring."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from statistics import mean, stdev
 
 
@@ -8,7 +8,7 @@ from statistics import mean, stdev
 class MetricEntry:
     name: str
     value: float
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     metadata: dict = field(default_factory=dict)
 
 
