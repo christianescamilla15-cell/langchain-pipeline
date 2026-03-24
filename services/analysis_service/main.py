@@ -1,5 +1,6 @@
 """Analysis Service - FastAPI app for LangChain document analysis."""
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import json
 import asyncio
@@ -9,6 +10,8 @@ from .tools import extract_keywords, detect_risk_terms, analyze_sentiment_basic,
 from .bedrock_client import get_llm
 from .events import publish_analysis_completed, subscribe_to_documents
 from .rag import get_vector_store
+from .callbacks import ObservabilityHandler, GlobalObservability
+from .guardrails import InputGuardrails, OutputGuardrails
 from services.mlops.metrics import MetricsTracker
 from services.mlops import StructuredLogger
 
@@ -46,6 +49,14 @@ class AnalyzeRequest(BaseModel):
 
 @app.post("/analyze")
 async def analyze_document(body: AnalyzeRequest):
+    obs = GlobalObservability()
+
+    # Input guardrails
+    input_check = InputGuardrails.validate(body.content)
+    if input_check.issues:
+        for issue in input_check.issues:
+            logger.warn("analysis_service", f"Input guardrail: {issue}")
+
     llm = get_llm()
 
     # Run tools in parallel
@@ -58,8 +69,10 @@ async def analyze_document(body: AnalyzeRequest):
     }
 
     if body.mode == "quick":
+        handler = ObservabilityHandler(chain_step="quick_summary")
         chain = create_simple_chain(llm)
-        summary = chain.invoke({"document": body.content})
+        summary = chain.invoke({"document": body.content}, config={"callbacks": [handler]})
+        obs.add_records(handler.records)
         result = {
             "document_id": body.document_id,
             "summary": summary,
@@ -93,8 +106,17 @@ async def analyze_document(body: AnalyzeRequest):
                     chains = create_analysis_chain(llm)
                 extract_chain, quality_chain, report_chain = chains
 
-                # Step 1: Extract & analyze
-                analysis = extract_chain.invoke({"document": body.content})
+                # Step 1: Extract & analyze with observability
+                extract_handler = ObservabilityHandler(chain_step="extraction")
+                analysis = extract_chain.invoke({"document": body.content}, config={"callbacks": [extract_handler]})
+                obs.add_records(extract_handler.records)
+
+            # Output guardrails on analysis
+            if isinstance(analysis, dict):
+                output_check = OutputGuardrails.validate(analysis, body.content)
+                if not output_check.valid:
+                    for issue in output_check.issues:
+                        logger.warn("analysis_service", f"Output guardrail: {issue}")
 
             # Step 2: Quality review (always run)
             if _prompt_registry:
@@ -103,11 +125,16 @@ async def analyze_document(body: AnalyzeRequest):
                 chains = create_analysis_chain(llm)
             _, quality_chain, report_chain = chains
             analysis_str = json.dumps(analysis) if isinstance(analysis, dict) else analysis
-            quality = quality_chain.invoke({"analysis": analysis_str})
+
+            quality_handler = ObservabilityHandler(chain_step="quality_review")
+            quality = quality_chain.invoke({"analysis": analysis_str}, config={"callbacks": [quality_handler]})
+            obs.add_records(quality_handler.records)
 
             # Step 3: Final report
             quality_str = json.dumps(quality)
-            report = report_chain.invoke({"analysis": analysis_str, "review": quality_str})
+            report_handler = ObservabilityHandler(chain_step="report")
+            report = report_chain.invoke({"analysis": analysis_str, "review": quality_str}, config={"callbacks": [report_handler]})
+            obs.add_records(report_handler.records)
 
         except Exception as e:
             logger.error("analysis_service", f"Chain failed: {str(e)}")
@@ -142,6 +169,10 @@ async def analyze_document(body: AnalyzeRequest):
             "agent_used": agent_used,
         }
 
+    # Add guardrail warnings to result
+    if input_check.issues:
+        result["guardrail_warnings"] = input_check.issues
+
     # Add document to RAG vector store
     store = get_vector_store()
     chunks_added = store.add_document(body.document_id, body.content)
@@ -150,6 +181,52 @@ async def analyze_document(body: AnalyzeRequest):
     _analyses[body.document_id] = result
     await publish_analysis_completed(body.document_id, result)
     return result
+
+
+@app.post("/analyze/stream")
+async def analyze_stream(body: AnalyzeRequest):
+    """Streaming analysis with Server-Sent Events."""
+    async def event_generator():
+        content = body.content
+
+        yield f"data: {json.dumps({'step': 'started', 'message': 'Analysis pipeline started'})}\n\n"
+        await asyncio.sleep(0.3)
+
+        # Tools phase
+        yield f"data: {json.dumps({'step': 'tools', 'message': 'Running analysis tools...'})}\n\n"
+        tools_result = await run_tools_parallel(content)
+        yield f"data: {json.dumps({'step': 'tools_done', 'keywords': tools_result['keywords'][:200]})}\n\n"
+        await asyncio.sleep(0.2)
+
+        # Chain phase
+        yield f"data: {json.dumps({'step': 'extraction', 'message': 'Extracting key information...'})}\n\n"
+        llm = get_llm()
+        extract_chain, quality_chain, report_chain = create_analysis_chain(llm)
+
+        try:
+            analysis = extract_chain.invoke({"document": content})
+            yield f"data: {json.dumps({'step': 'extraction_done', 'summary': str(analysis.get('summary', ''))[:200]})}\n\n"
+            await asyncio.sleep(0.2)
+
+            yield f"data: {json.dumps({'step': 'quality', 'message': 'Quality review...'})}\n\n"
+            quality = quality_chain.invoke({"analysis": json.dumps(analysis)})
+            yield f"data: {json.dumps({'step': 'quality_done', 'score': quality.get('score', 0)})}\n\n"
+            await asyncio.sleep(0.2)
+
+            yield f"data: {json.dumps({'step': 'report', 'message': 'Generating report...'})}\n\n"
+            # Stream report word by word
+            report_text = report_chain.invoke({"analysis": json.dumps(analysis), "review": json.dumps(quality)})
+            words = report_text.split()
+            for i in range(0, len(words), 5):
+                chunk = " ".join(words[i:i+5])
+                yield f"data: {json.dumps({'step': 'report_chunk', 'chunk': chunk})}\n\n"
+                await asyncio.sleep(0.05)
+        except Exception as e:
+            yield f"data: {json.dumps({'step': 'error', 'message': str(e)})}\n\n"
+
+        yield f"data: {json.dumps({'step': 'complete', 'message': 'Analysis complete'})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.get("/analyses")

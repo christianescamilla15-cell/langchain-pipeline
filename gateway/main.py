@@ -8,8 +8,11 @@ from services.document_service.main import app as doc_app, store as doc_store
 from services.analysis_service.main import app as analysis_app, metrics as analysis_metrics, set_prompt_registry
 from services.report_service.main import app as report_app
 from services.analysis_service.rag import get_vector_store
+from services.analysis_service.callbacks import GlobalObservability
+from services.analysis_service.bedrock_client import get_model_router
 from services.event_bus import EventBus
 from services.mlops import PromptRegistry, MetricsTracker, StructuredLogger
+from services.mlops.experiments import get_experiment_manager
 from gateway.auth import APIKeyMiddleware
 
 app = FastAPI(
@@ -71,6 +74,13 @@ for i in range(10):
     analysis_metrics.record("processing_time_ms", random.uniform(800, 3500))
     analysis_metrics.record("input_tokens", random.uniform(500, 2000))
     analysis_metrics.record("output_tokens", random.uniform(200, 800))
+
+# Seed demo experiment
+exp_mgr = get_experiment_manager()
+exp_mgr.create("extract_v2_test", "extract_analyze", "v1.0", "v2.0", 0.5)
+for _ in range(15):
+    exp_mgr.record_result("extract_v2_test", "v1.0", random.uniform(6.5, 8.5))
+    exp_mgr.record_result("extract_v2_test", "v2.0", random.uniform(7.0, 9.5))
 
 logger.info("gateway", "API Gateway started")
 
@@ -157,6 +167,40 @@ async def get_prompt(name: str):
 @app.get("/api/mlops/logs")
 async def get_logs(service: str = None, level: str = None, limit: int = 100):
     return {"logs": logger.get_logs(service=service, level=level, limit=limit)}
+
+
+@app.get("/api/mlops/llm-costs")
+async def llm_costs():
+    obs = GlobalObservability()
+    return obs.get_summary()
+
+
+@app.get("/api/mlops/models")
+async def model_status():
+    router = get_model_router()
+    return {"models": router.get_model_status()}
+
+
+@app.get("/api/mlops/experiments")
+async def list_experiments():
+    mgr = get_experiment_manager()
+    return {"experiments": mgr.list_experiments()}
+
+
+@app.post("/api/mlops/experiments")
+async def create_experiment(body: dict):
+    mgr = get_experiment_manager()
+    mgr.create(body["name"], body["prompt_name"], body["control"], body["treatment"], body.get("split", 0.5))
+    return mgr.get_results(body["name"])
+
+
+@app.post("/api/mlops/experiments/{name}/conclude")
+async def conclude_experiment(name: str):
+    mgr = get_experiment_manager()
+    winner = mgr.conclude(name)
+    if not winner:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    return {"winner": winner, "results": mgr.get_results(name)}
 
 
 # Serve frontend static files if built

@@ -8,6 +8,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.event_bus import EventBus
 from services.mlops.logger import StructuredLogger
+from services.analysis_service.callbacks import GlobalObservability
+import services.analysis_service.bedrock_client as bedrock_mod
+import services.mlops.experiments as experiments_mod
 
 
 @pytest.fixture(autouse=True)
@@ -15,9 +18,15 @@ def reset_singletons():
     """Reset singletons before each test."""
     EventBus._instance = None
     StructuredLogger._instance = None
+    GlobalObservability._instance = None
+    bedrock_mod._router = None
+    experiments_mod._manager = None
     yield
     EventBus._instance = None
     StructuredLogger._instance = None
+    GlobalObservability._instance = None
+    bedrock_mod._router = None
+    experiments_mod._manager = None
 
 
 @pytest.fixture
