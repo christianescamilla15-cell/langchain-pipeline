@@ -13,7 +13,7 @@ class ValidationResult:
 class InputGuardrails:
     """Pre-processing validation for document content before LLM analysis."""
 
-    PII_PATTERNS = {
+    PII_PATTERNS: dict[str, str] = {
         "email": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
         "ssn": r"\b\d{3}-\d{2}-\d{4}\b",
         "credit_card": r"\b(?:\d{4}[-\s]?){3}\d{4}\b",

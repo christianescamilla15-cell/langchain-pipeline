@@ -6,6 +6,7 @@ import math
 import json
 import hashlib
 from dataclasses import dataclass, field
+from typing import Any, Optional
 
 
 @dataclass
@@ -79,7 +80,7 @@ class FAISSVectorStore:
             count += 1
         return count
 
-    def search(self, query: str, top_k: int = 3) -> list[dict]:
+    def search(self, query: str, top_k: int = 3) -> list[dict[str, Any]]:
         """Find most similar chunks to query."""
         if not self._chunks:
             return []
@@ -119,7 +120,7 @@ class FAISSVectorStore:
     def doc_count(self) -> int:
         return len(set(c.doc_id for c in self._chunks))
 
-    def clear(self):
+    def clear(self) -> None:
         self._chunks.clear()
 
 

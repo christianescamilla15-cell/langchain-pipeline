@@ -1,4 +1,5 @@
 """API Gateway - Unified entry point routing to all microservices."""
+from typing import Any, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -88,7 +89,7 @@ logger.info("gateway", "API Gateway started")
 # --- Unified API routes ---
 
 @app.get("/api/health")
-async def health():
+async def health() -> dict[str, Any]:
     bus = EventBus()
     store = get_vector_store()
     return {
@@ -108,25 +109,25 @@ async def health():
 
 
 @app.get("/api/events")
-async def get_events(limit: int = 50):
+async def get_events(limit: int = 50) -> dict[str, Any]:
     bus = EventBus()
     return {"events": bus.get_log(limit=limit)}
 
 
 @app.get("/api/rag/search")
-async def rag_search(query: str, top_k: int = 3):
+async def rag_search(query: str, top_k: int = 3) -> dict[str, Any]:
     store = get_vector_store()
     return {"results": store.search(query, top_k), "total_chunks": store.chunk_count}
 
 
 @app.get("/api/rag/stats")
-async def rag_stats():
+async def rag_stats() -> dict[str, int]:
     store = get_vector_store()
     return {"chunks": store.chunk_count, "documents": store.doc_count}
 
 
 @app.get("/api/mlops/metrics")
-async def get_mlops_metrics():
+async def get_mlops_metrics() -> dict[str, Any]:
     return {
         "dashboard": analysis_metrics.get_dashboard(),
         "all_names": analysis_metrics.get_all_names(),
@@ -134,7 +135,7 @@ async def get_mlops_metrics():
 
 
 @app.get("/api/mlops/metrics/{name}")
-async def get_metric_detail(name: str):
+async def get_metric_detail(name: str) -> dict[str, Any]:
     return {
         "name": name,
         "summary": analysis_metrics.get_summary(name),
@@ -143,7 +144,7 @@ async def get_metric_detail(name: str):
 
 
 @app.get("/api/mlops/prompts")
-async def get_prompts():
+async def get_prompts() -> dict[str, Any]:
     names = prompt_registry.list_all_prompts()
     prompts = {}
     for name in names:
@@ -152,7 +153,7 @@ async def get_prompts():
 
 
 @app.get("/api/mlops/prompts/{name}")
-async def get_prompt(name: str):
+async def get_prompt(name: str) -> dict[str, Any]:
     active = prompt_registry.get_active(name)
     if not active:
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -165,37 +166,37 @@ async def get_prompt(name: str):
 
 
 @app.get("/api/mlops/logs")
-async def get_logs(service: str = None, level: str = None, limit: int = 100):
+async def get_logs(service: Optional[str] = None, level: Optional[str] = None, limit: int = 100) -> dict[str, Any]:
     return {"logs": logger.get_logs(service=service, level=level, limit=limit)}
 
 
 @app.get("/api/mlops/llm-costs")
-async def llm_costs():
+async def llm_costs() -> dict[str, Any]:
     obs = GlobalObservability()
     return obs.get_summary()
 
 
 @app.get("/api/mlops/models")
-async def model_status():
+async def model_status() -> dict[str, Any]:
     router = get_model_router()
     return {"models": router.get_model_status()}
 
 
 @app.get("/api/mlops/experiments")
-async def list_experiments():
+async def list_experiments() -> dict[str, Any]:
     mgr = get_experiment_manager()
     return {"experiments": mgr.list_experiments()}
 
 
 @app.post("/api/mlops/experiments")
-async def create_experiment(body: dict):
+async def create_experiment(body: dict) -> Optional[dict[str, Any]]:
     mgr = get_experiment_manager()
     mgr.create(body["name"], body["prompt_name"], body["control"], body["treatment"], body.get("split", 0.5))
     return mgr.get_results(body["name"])
 
 
 @app.post("/api/mlops/experiments/{name}/conclude")
-async def conclude_experiment(name: str):
+async def conclude_experiment(name: str) -> dict[str, Any]:
     mgr = get_experiment_manager()
     winner = mgr.conclude(name)
     if not winner:

@@ -70,7 +70,7 @@ class ExperimentManager:
             else exp.control.version
         )
 
-    def record_result(self, experiment_name: str, version: str, score: float):
+    def record_result(self, experiment_name: str, version: str, score: float) -> None:
         exp = self._experiments.get(experiment_name)
         if not exp:
             return

@@ -65,6 +65,27 @@ python -m pytest tests/ -v
 | `GET /api/mlops/prompts`    | Prompt registry          |
 | `GET /api/mlops/logs`       | Structured logs          |
 
+## Testing
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run with coverage
+python -m pytest tests/ --cov=services --cov=gateway --cov-report=term-missing
+```
+
+**114 tests passing** | **86.2% code coverage**
+
+| Module | Coverage |
+|---|---|
+| services/analysis_service | 59–100% |
+| services/event_bus | 100% |
+| services/mlops | 97–100% |
+| services/document_service | 84–94% |
+| services/report_service | 68–100% |
+| gateway | 81–93% |
+
 ## License
 
 MIT

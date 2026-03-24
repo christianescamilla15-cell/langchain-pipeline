@@ -18,19 +18,19 @@ class Event:
 
 class EventBus:
     """Singleton event bus for inter-service communication."""
-    _instance = None
+    _instance: "EventBus | None" = None
 
-    def __new__(cls):
+    def __new__(cls) -> "EventBus":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._subscribers = defaultdict(list)
-            cls._instance._event_log = []
+            cls._instance._subscribers: dict[str, list[Callable]] = defaultdict(list)
+            cls._instance._event_log: list[Event] = []
         return cls._instance
 
-    def subscribe(self, topic: str, handler: Callable):
+    def subscribe(self, topic: str, handler: Callable) -> None:
         self._subscribers[topic].append(handler)
 
-    async def publish(self, topic: str, payload: dict):
+    async def publish(self, topic: str, payload: dict) -> None:
         event = Event(topic=topic, payload=payload)
         self._event_log.append(event)
         for handler in self._subscribers[topic]:
@@ -50,7 +50,7 @@ class EventBus:
             for e in self._event_log[-limit:]
         ]
 
-    def clear(self):
+    def clear(self) -> None:
         self._subscribers.clear()
         self._event_log.clear()
         # DON'T set _instance = None — that breaks held references

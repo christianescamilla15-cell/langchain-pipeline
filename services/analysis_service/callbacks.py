@@ -37,7 +37,7 @@ class ObservabilityHandler(BaseCallbackHandler):
         self._records: list[LLMCallRecord] = []
         self._model_name = "unknown"
 
-    def on_llm_start(self, serialized: dict, prompts: list[str], **kwargs):
+    def on_llm_start(self, serialized: dict, prompts: list[str], **kwargs: Any) -> None:
         self._start_time = time.time()
         self._model_name = serialized.get(
             "name",
@@ -46,7 +46,7 @@ class ObservabilityHandler(BaseCallbackHandler):
             else "unknown",
         )
 
-    def on_llm_end(self, response: LLMResult, **kwargs):
+    def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
         latency = int((time.time() - (self._start_time or time.time())) * 1000)
 
         # Extract token usage
@@ -91,7 +91,7 @@ class ObservabilityHandler(BaseCallbackHandler):
         )
         self._records.append(record)
 
-    def on_llm_error(self, error: Exception, **kwargs):
+    def on_llm_error(self, error: Exception, **kwargs: Any) -> None:
         latency = int((time.time() - (self._start_time or time.time())) * 1000)
         self._records.append(
             LLMCallRecord(
@@ -126,15 +126,15 @@ class ObservabilityHandler(BaseCallbackHandler):
 class GlobalObservability:
     """Singleton that aggregates all LLM call records across the application."""
 
-    _instance = None
+    _instance: Optional["GlobalObservability"] = None
 
-    def __new__(cls):
+    def __new__(cls) -> "GlobalObservability":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._all_records = []
+            cls._instance._all_records: list[dict] = []
         return cls._instance
 
-    def add_records(self, records: list[dict]):
+    def add_records(self, records: list[dict]) -> None:
         self._all_records.extend(records)
 
     def get_summary(self) -> dict:
@@ -181,5 +181,5 @@ class GlobalObservability:
     def get_records(self, limit: int = 50) -> list[dict]:
         return self._all_records[-limit:]
 
-    def clear(self):
+    def clear(self) -> None:
         self._all_records.clear()
