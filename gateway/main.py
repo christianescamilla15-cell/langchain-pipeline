@@ -7,8 +7,10 @@ import os
 from services.document_service.main import app as doc_app, store as doc_store
 from services.analysis_service.main import app as analysis_app, metrics as analysis_metrics
 from services.report_service.main import app as report_app
+from services.analysis_service.rag import get_vector_store
 from services.event_bus import EventBus
 from services.mlops import PromptRegistry, MetricsTracker, StructuredLogger
+from gateway.auth import APIKeyMiddleware
 
 app = FastAPI(
     title="LangChain Pipeline - API Gateway",
@@ -16,12 +18,14 @@ app = FastAPI(
     description="Event-driven microservices with LangChain orchestration and MLOps",
 )
 
+app.add_middleware(APIKeyMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "https://langchain-pipeline.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "X-API-Key"],
 )
 
 # Mount microservices
@@ -58,6 +62,7 @@ logger.info("gateway", "API Gateway started")
 @app.get("/api/health")
 async def health():
     bus = EventBus()
+    store = get_vector_store()
     return {
         "status": "healthy",
         "services": {
@@ -65,9 +70,12 @@ async def health():
             "analysis_service": "running",
             "report_service": "running",
             "event_bus": "running",
+            "rag_store": "running",
         },
         "documents_count": doc_store.count(),
         "events_count": len(bus.get_log(limit=9999)),
+        "rag_chunks": store.chunk_count,
+        "rag_documents": store.doc_count,
     }
 
 
@@ -75,6 +83,18 @@ async def health():
 async def get_events(limit: int = 50):
     bus = EventBus()
     return {"events": bus.get_log(limit=limit)}
+
+
+@app.get("/api/rag/search")
+async def rag_search(query: str, top_k: int = 3):
+    store = get_vector_store()
+    return {"results": store.search(query, top_k), "total_chunks": store.chunk_count}
+
+
+@app.get("/api/rag/stats")
+async def rag_stats():
+    store = get_vector_store()
+    return {"chunks": store.chunk_count, "documents": store.doc_count}
 
 
 @app.get("/api/mlops/metrics")

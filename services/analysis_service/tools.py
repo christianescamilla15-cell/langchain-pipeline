@@ -1,6 +1,7 @@
 """LangChain tools for document processing."""
 from langchain_core.tools import tool
 import re
+import json
 from collections import Counter
 
 
@@ -73,4 +74,15 @@ def count_sections(text: str) -> str:
     return str({"paragraphs": paragraphs, "sentences": sentences, "words": words})
 
 
-ANALYSIS_TOOLS = [extract_keywords, detect_risk_terms, analyze_sentiment_basic, count_sections]
+@tool
+def retrieve_similar_context(query: str) -> str:
+    """Search the vector store for similar document chunks. Use this to find relevant context from previously analyzed documents."""
+    from services.analysis_service.rag import get_vector_store
+    store = get_vector_store()
+    results = store.search(query, top_k=3)
+    if not results:
+        return "No similar documents in the knowledge base yet."
+    return json.dumps(results)
+
+
+ANALYSIS_TOOLS = [extract_keywords, detect_risk_terms, analyze_sentiment_basic, count_sections, retrieve_similar_context]

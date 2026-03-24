@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 
-/* ─── i18n ─── */
+/* --- i18n --- */
 const T = {
   en: {
     title: 'LangChain Pipeline',
@@ -78,7 +78,7 @@ const T = {
   }
 }
 
-/* ─── Sample Documents ─── */
+/* --- Sample Documents --- */
 const SAMPLES = [
   {
     id: 'contract',
@@ -103,7 +103,7 @@ const SAMPLES = [
   }
 ]
 
-/* ─── Demo analysis engine (client-side) ─── */
+/* --- Demo analysis engine (client-side) --- */
 function demoAnalyze(content, mode) {
   const words = content.split(/\s+/)
   const wordCount = words.length
@@ -146,7 +146,7 @@ function demoAnalyze(content, mode) {
   return { document_id:'demo', analysis, quality_review: quality, report: JSON.stringify(report), tools, mode:'full' }
 }
 
-/* ─── Styles ─── */
+/* --- Styles --- */
 const colors = { bg:'#0F172A', surface:'#1E293B', surfaceLight:'#334155', blue:'#3B82F6', green:'#10B981', amber:'#F59E0B', red:'#EF4444', text:'#F8FAFC', textMuted:'#94A3B8', border:'#475569' }
 
 const css = `
@@ -204,21 +204,19 @@ body{background:${colors.bg};color:${colors.text};font-family:-apple-system,Blin
 table{width:100%;border-collapse:collapse}
 th{text-align:left;padding:10px;color:${colors.textMuted};font-size:13px;border-bottom:1px solid ${colors.border}}
 td{padding:10px;font-size:14px;border-bottom:1px solid ${colors.border}22}
-.arch-diagram{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:20px 0}
 .arch-box{background:${colors.surfaceLight};border:2px solid ${colors.border};border-radius:12px;padding:20px;text-align:center;transition:all .3s}
 .arch-box:hover{border-color:${colors.blue};transform:translateY(-2px)}
-.arch-box.bus{grid-column:1/-1;background:${colors.blue}11;border-color:${colors.blue}44}
-.arch-box.mlops{grid-column:1/-1;background:${colors.green}11;border-color:${colors.green}44}
-.arch-box.gw{grid-column:1/-1;background:${colors.amber}11;border-color:${colors.amber}44}
-.arch-icon{font-size:32px;margin-bottom:8px}
-.arch-label{font-weight:600;font-size:14px}
-.arch-desc{color:${colors.textMuted};font-size:12px;margin-top:4px}
-.chain-step{display:flex;align-items:center;gap:12px;padding:12px;margin:6px 0;background:${colors.surfaceLight};border-radius:8px;border-left:3px solid ${colors.blue}}
-.chain-step.active{border-left-color:${colors.green};background:${colors.green}11}
-.chain-step.done{border-left-color:${colors.green};opacity:.7}
-.chain-num{width:28px;height:28px;border-radius:50%;background:${colors.blue};color:white;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0}
+.chain-step{display:flex;align-items:center;gap:12px;padding:12px;margin:6px 0;background:${colors.surfaceLight};border-radius:8px;border-left:3px solid ${colors.blue};position:relative;overflow:hidden;transition:all .3s}
+.chain-step.active{border-left-color:${colors.green};background:${colors.green}11;animation:chainPulse 1.5s ease infinite}
+.chain-step.done{border-left-color:${colors.green};opacity:.8}
+.chain-num{width:28px;height:28px;border-radius:50%;background:${colors.blue};color:white;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0;z-index:1}
 .chain-step.active .chain-num{background:${colors.green}}
-.chain-step.done .chain-num{background:${colors.green}}
+.chain-step.done .chain-num{background:${colors.green};animation:checkScale .3s ease}
+.chain-progress{position:absolute;left:0;top:0;height:100%;background:${colors.green}15;transition:width .3s ease;z-index:0}
+.typing-dots{display:inline-flex;gap:3px;margin-left:8px}
+.typing-dots span{width:4px;height:4px;border-radius:50%;background:${colors.amber};animation:typingBounce .6s ease infinite}
+.typing-dots span:nth-child(2){animation-delay:.15s}
+.typing-dots span:nth-child(3){animation-delay:.3s}
 .voice-btn{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:${colors.blue};border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(59,130,246,.4);transition:all .2s;z-index:100}
 .voice-btn:hover{transform:scale(1.1)}
 .empty-state{text-align:center;padding:40px;color:${colors.textMuted}}
@@ -226,9 +224,133 @@ td{padding:10px;font-size:14px;border-bottom:1px solid ${colors.border}22}
 .score-high{background:${colors.green}22;color:${colors.green}}
 .score-mid{background:${colors.amber}22;color:${colors.amber}}
 .score-low{background:${colors.red}22;color:${colors.red}}
+
+@keyframes chainPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+  50% { box-shadow: 0 0 20px 4px rgba(59,130,246,0.6); }
+}
+@keyframes chainProgress {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+@keyframes chainFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes eventSlideIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes checkScale {
+  0% { transform: scale(0.5); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes typingBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes flowDash {
+  to { stroke-dashoffset: -20; }
+}
+@keyframes archGlow {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50% { filter: drop-shadow(0 0 6px rgba(59,130,246,0.5)); }
+}
+.event-item-animated{animation:eventSlideIn .3s ease forwards}
+.chain-step-animated{animation:chainFadeIn .3s ease forwards}
 `
 
-/* ─── App ─── */
+/* --- Architecture SVG Diagram --- */
+function ArchitectureSVG({ t, lang }) {
+  const [hovered, setHovered] = useState(null)
+  const boxes = [
+    { id:'gateway', x:340, y:20, w:160, h:60, label:t.services.gateway, desc:'FastAPI unified API routing', color:colors.amber, icon:'GW' },
+    { id:'doc', x:60, y:140, w:160, h:60, label:t.services.doc, desc:'CRUD + Pydantic validation', color:colors.blue, icon:'DOC' },
+    { id:'analysis', x:340, y:140, w:160, h:60, label:t.services.analysis, desc:'LangChain + Tools + Bedrock', color:colors.blue, icon:'AI' },
+    { id:'report', x:620, y:140, w:160, h:60, label:t.services.report, desc:'Report generation', color:colors.blue, icon:'RPT' },
+    { id:'bus', x:200, y:260, w:440, h:50, label:t.services.bus, desc:'In-memory pub/sub (Redis-like)', color:colors.green, icon:'BUS' },
+    { id:'mlops', x:200, y:340, w:440, h:50, label:t.services.mlops, desc:'Prompt Registry + Metrics + Logger', color:colors.green, icon:'OPS' },
+  ]
+
+  const arrows = [
+    // Gateway to services (HTTP - blue)
+    { x1:420, y1:80, x2:140, y2:140, color:colors.blue, label:'HTTP' },
+    { x1:420, y1:80, x2:420, y2:140, color:colors.blue, label:'HTTP' },
+    { x1:420, y1:80, x2:700, y2:140, color:colors.blue, label:'HTTP' },
+    // Services to event bus (events - green)
+    { x1:140, y1:200, x2:300, y2:260, color:colors.green, label:'events' },
+    { x1:420, y1:200, x2:420, y2:260, color:colors.green, label:'events' },
+    { x1:700, y1:200, x2:540, y2:260, color:colors.green, label:'events' },
+    // Event bus to MLOps (metrics - amber)
+    { x1:420, y1:310, x2:420, y2:340, color:colors.amber, label:'metrics' },
+  ]
+
+  return (
+    <svg viewBox="0 0 840 410" style={{width:'100%',maxWidth:840,margin:'0 auto',display:'block'}}>
+      <defs>
+        <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill={colors.blue} />
+        </marker>
+        <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill={colors.green} />
+        </marker>
+        <marker id="arrowAmber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill={colors.amber} />
+        </marker>
+      </defs>
+
+      {/* Arrows */}
+      {arrows.map((a, i) => (
+        <line key={`arrow-${i}`}
+          x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2}
+          stroke={a.color} strokeWidth="2" strokeDasharray="6 4"
+          markerEnd={`url(#arrow${a.color === colors.blue ? 'Blue' : a.color === colors.green ? 'Green' : 'Amber'})`}
+          style={{animation:'flowDash 1s linear infinite'}}
+        />
+      ))}
+
+      {/* Boxes */}
+      {boxes.map(b => {
+        const isHovered = hovered === b.id
+        return (
+          <g key={b.id}
+            onMouseEnter={() => setHovered(b.id)}
+            onMouseLeave={() => setHovered(null)}
+            style={{cursor:'pointer'}}
+          >
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="10"
+              fill={colors.surfaceLight}
+              stroke={isHovered ? b.color : colors.border}
+              strokeWidth={isHovered ? 2.5 : 1.5}
+              style={{transition:'all .2s', filter: isHovered ? `drop-shadow(0 0 8px ${b.color}66)` : 'none'}}
+            />
+            <text x={b.x + b.w/2} y={b.y + b.h/2 - 6} textAnchor="middle" fill={colors.text} fontSize="13" fontWeight="600">{b.label}</text>
+            <text x={b.x + b.w/2} y={b.y + b.h/2 + 12} textAnchor="middle" fill={colors.textMuted} fontSize="10">{b.desc}</text>
+            {isHovered && (
+              <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="10"
+                fill="transparent" stroke={b.color} strokeWidth="2"
+                style={{animation:'archGlow 1.5s ease infinite'}}
+              />
+            )}
+          </g>
+        )
+      })}
+
+      {/* Legend */}
+      <g transform="translate(20, 380)">
+        <line x1="0" y1="5" x2="20" y2="5" stroke={colors.blue} strokeWidth="2" strokeDasharray="6 4" />
+        <text x="25" y="9" fill={colors.textMuted} fontSize="10">HTTP</text>
+        <line x1="70" y1="5" x2="90" y2="5" stroke={colors.green} strokeWidth="2" strokeDasharray="6 4" />
+        <text x="95" y="9" fill={colors.textMuted} fontSize="10">Events</text>
+        <line x1="150" y1="5" x2="170" y2="5" stroke={colors.amber} strokeWidth="2" strokeDasharray="6 4" />
+        <text x="175" y="9" fill={colors.textMuted} fontSize="10">Metrics</text>
+      </g>
+    </svg>
+  )
+}
+
+/* --- App --- */
 export default function App() {
   const [lang, setLang] = useState('en')
   const [tab, setTab] = useState('arch')
@@ -239,34 +361,51 @@ export default function App() {
   const [events, setEvents] = useState([])
   const [metrics, setMetrics] = useState({})
   const [chainStep, setChainStep] = useState(-1)
+  const [stepProgress, setStepProgress] = useState(0)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const t = T[lang]
 
   const runAnalysis = useCallback(async () => {
     if (!selectedDoc) return
-    setLoading(true); setResult(null); setChainStep(0)
+    setLoading(true); setResult(null); setChainStep(0); setStepProgress(0)
     const doc = SAMPLES.find(d => d.id === selectedDoc)
 
-    // Simulate chain steps
+    // Simulate chain steps with progress
     const steps = mode === 'full' ? [0,1,2,3,4] : [0,1]
     for (let i = 0; i < steps.length; i++) {
       setChainStep(steps[i])
-      await new Promise(r => setTimeout(r, 400 + Math.random()*300))
+      setStepProgress(0)
+      const duration = 400 + Math.random()*300
+      const interval = 50
+      const ticks = Math.ceil(duration / interval)
+      for (let tick = 0; tick < ticks; tick++) {
+        await new Promise(r => setTimeout(r, interval))
+        setStepProgress(Math.min(100, ((tick + 1) / ticks) * 100))
+      }
     }
 
     const res = demoAnalyze(doc.content, mode)
     setResult(res)
     setChainStep(-1)
+    setStepProgress(0)
     setLoading(false)
 
-    // Add events
-    const now = new Date().toISOString()
-    const newEvents = [
-      { topic:'document.created', payload:{document_id:doc.id, title:doc.title}, timestamp:now, id:`evt-${Date.now()}` },
-      { topic:'analysis.completed', payload:{document_id:doc.id, mode}, timestamp:now, id:`evt-${Date.now()+1}` },
-      { topic:'report.generated', payload:{document_id:doc.id}, timestamp:now, id:`evt-${Date.now()+2}` },
+    // Add events with staggered timestamps
+    const baseTime = Date.now()
+    const eventDefs = [
+      { topic:'document.created', payload:{document_id:doc.id, title:doc.title} },
+      { topic:'analysis.completed', payload:{document_id:doc.id, mode} },
+      { topic:'report.generated', payload:{document_id:doc.id} },
     ]
-    setEvents(prev => [...newEvents, ...prev].slice(0,50))
+    eventDefs.forEach((evt, i) => {
+      setTimeout(() => {
+        setEvents(prev => [{
+          ...evt,
+          timestamp: new Date(baseTime + i * 500).toISOString(),
+          id: `evt-${baseTime + i}`
+        }, ...prev].slice(0, 50))
+      }, i * 500)
+    })
 
     // Add metrics
     if (mode === 'full' && res.quality_review) {
@@ -315,38 +454,7 @@ export default function App() {
             <div className="card">
               <h3>Microservices Architecture</h3>
               <p style={{color:colors.textMuted,marginBottom:16,fontSize:14}}>{t.archDesc}</p>
-              <div className="arch-diagram">
-                <div className="arch-box gw">
-                  <div className="arch-icon">🌐</div>
-                  <div className="arch-label">{t.services.gateway}</div>
-                  <div className="arch-desc">FastAPI unified API routing</div>
-                </div>
-                <div className="arch-box">
-                  <div className="arch-icon">📄</div>
-                  <div className="arch-label">{t.services.doc}</div>
-                  <div className="arch-desc">CRUD + Pydantic validation</div>
-                </div>
-                <div className="arch-box">
-                  <div className="arch-icon">🔬</div>
-                  <div className="arch-label">{t.services.analysis}</div>
-                  <div className="arch-desc">LangChain + Tools + Bedrock</div>
-                </div>
-                <div className="arch-box">
-                  <div className="arch-icon">📊</div>
-                  <div className="arch-label">{t.services.report}</div>
-                  <div className="arch-desc">Report generation</div>
-                </div>
-                <div className="arch-box bus">
-                  <div className="arch-icon">⚡</div>
-                  <div className="arch-label">{t.services.bus}</div>
-                  <div className="arch-desc">In-memory pub/sub (Redis-like pattern)</div>
-                </div>
-                <div className="arch-box mlops">
-                  <div className="arch-icon">📈</div>
-                  <div className="arch-label">{t.services.mlops}</div>
-                  <div className="arch-desc">Prompt Registry + Metrics Tracker + Structured Logger</div>
-                </div>
-              </div>
+              <ArchitectureSVG t={t} lang={lang} />
             </div>
 
             <div className="card">
@@ -388,17 +496,49 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Chain visualization */}
+                {/* Chain visualization with animations */}
                 {(loading || result) && (
                   <div style={{marginTop:16}}>
-                    {t.chainSteps.slice(0, mode === 'full' ? 5 : 2).map((step, i) => (
-                      <div key={i} className={`chain-step ${chainStep === i ? 'active' : chainStep > i || result ? 'done' : ''}`}>
-                        <div className="chain-num">{i+1}</div>
-                        <span style={{fontSize:14}}>{step}</span>
-                        {chainStep === i && <span style={{color:colors.amber,fontSize:12,marginLeft:'auto'}}>Processing...</span>}
-                        {(chainStep > i || result) && <span style={{color:colors.green,fontSize:12,marginLeft:'auto'}}>Done</span>}
-                      </div>
-                    ))}
+                    {/* SVG connecting lines */}
+                    {mode === 'full' && (
+                      <svg width="4" height={t.chainSteps.length * 52} style={{position:'absolute',marginLeft:25,marginTop:6,pointerEvents:'none',zIndex:0}}>
+                        <line x1="2" y1="0" x2="2" y2={t.chainSteps.length * 52}
+                          stroke={colors.border} strokeWidth="2" strokeDasharray="4 4"
+                          style={{animation:'flowDash 1.5s linear infinite'}}
+                        />
+                      </svg>
+                    )}
+                    {t.chainSteps.slice(0, mode === 'full' ? 5 : 2).map((step, i) => {
+                      const isActive = chainStep === i
+                      const isDone = chainStep > i || result
+                      return (
+                        <div key={i} className={`chain-step chain-step-animated ${isActive ? 'active' : isDone ? 'done' : ''}`}
+                          style={{animationDelay: `${i * 0.1}s`}}>
+                          {/* Progress bar */}
+                          {isActive && (
+                            <div className="chain-progress" style={{width: `${stepProgress}%`}} />
+                          )}
+                          {isDone && <div className="chain-progress" style={{width:'100%',background:`${colors.green}10`}} />}
+                          <div className="chain-num">
+                            {isDone ? (
+                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                <path d="M2 7l3.5 3.5L12 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            ) : (i+1)}
+                          </div>
+                          <span style={{fontSize:14,zIndex:1}}>{step}</span>
+                          {isActive && (
+                            <span style={{color:colors.amber,fontSize:12,marginLeft:'auto',display:'flex',alignItems:'center',zIndex:1}}>
+                              Processing
+                              <span className="typing-dots" style={{marginLeft:4}}>
+                                <span></span><span></span><span></span>
+                              </span>
+                            </span>
+                          )}
+                          {isDone && <span style={{color:colors.green,fontSize:12,marginLeft:'auto',zIndex:1}}>Done</span>}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -406,7 +546,7 @@ export default function App() {
 
             {/* Results */}
             {result && (
-              <div className="card">
+              <div className="card" style={{animation:'chainFadeIn .4s ease'}}>
                 <h3>{t.results}</h3>
                 {result.mode === 'quick' ? (
                   <div className="result-section">
@@ -475,7 +615,7 @@ export default function App() {
               <div className="empty-state">{t.noEvents}</div>
             ) : (
               events.map((evt, i) => (
-                <div key={i} className="event-item">
+                <div key={evt.id || i} className="event-item event-item-animated" style={{animationDelay:`${i * 0.05}s`}}>
                   <span className="event-time">{new Date(evt.timestamp).toLocaleTimeString()}</span>
                   <span className="event-topic">{evt.topic}</span>
                   <span className="event-payload">{JSON.stringify(evt.payload)}</span>

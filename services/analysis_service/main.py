@@ -3,10 +3,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import json
 
-from .chains import create_analysis_chain, create_simple_chain
-from .tools import extract_keywords, detect_risk_terms, analyze_sentiment_basic, count_sections
+from .chains import create_analysis_chain, create_simple_chain, create_agent_chain, create_composed_chain
+from .tools import extract_keywords, detect_risk_terms, analyze_sentiment_basic, count_sections, ANALYSIS_TOOLS
 from .bedrock_client import get_llm
 from .events import publish_analysis_completed, subscribe_to_documents
+from .rag import get_vector_store
 from services.mlops.metrics import MetricsTracker
 
 app = FastAPI(title="Analysis Service", version="1.0.0")
@@ -47,13 +48,33 @@ async def analyze_document(body: AnalyzeRequest):
             "mode": "quick",
         }
     else:
-        extract_chain, quality_chain, report_chain = create_analysis_chain(llm)
+        # Try agent first, fallback to manual chains
+        agent_executor = create_agent_chain(llm, ANALYSIS_TOOLS)
+        agent_used = False
 
-        # Step 1: Extract & analyze
-        analysis = extract_chain.invoke({"document": body.content})
+        if agent_executor:
+            try:
+                agent_result = agent_executor.invoke({"document": body.content})
+                # Parse agent output
+                agent_output = agent_result.get("output", "")
+                try:
+                    analysis = json.loads(agent_output)
+                except (json.JSONDecodeError, TypeError):
+                    analysis = {"summary": agent_output, "key_topics": [], "sentiment": "neutral", "risk_level": "low", "action_items": []}
+                agent_used = True
+            except Exception:
+                agent_used = False
 
-        # Step 2: Quality review
-        analysis_str = json.dumps(analysis)
+        if not agent_used:
+            # Fallback to manual chains
+            extract_chain, quality_chain, report_chain = create_analysis_chain(llm)
+
+            # Step 1: Extract & analyze
+            analysis = extract_chain.invoke({"document": body.content})
+
+        # Step 2: Quality review (always run)
+        _, quality_chain, report_chain = create_analysis_chain(llm)
+        analysis_str = json.dumps(analysis) if isinstance(analysis, dict) else analysis
         quality = quality_chain.invoke({"analysis": analysis_str})
 
         # Step 3: Final report
@@ -75,7 +96,13 @@ async def analyze_document(body: AnalyzeRequest):
             "report": report,
             "tools": tool_results,
             "mode": "full",
+            "agent_used": agent_used,
         }
+
+    # Add document to RAG vector store
+    store = get_vector_store()
+    chunks_added = store.add_document(body.document_id, body.content)
+    result["rag_chunks_added"] = chunks_added
 
     _analyses[body.document_id] = result
     await publish_analysis_completed(body.document_id, result)
@@ -105,11 +132,16 @@ async def _handle_document_created(event):
     keywords = extract_keywords.invoke(content)
     sentiment = analyze_sentiment_basic.invoke(content)
 
+    # Add to RAG store
+    store = get_vector_store()
+    chunks_added = store.add_document(doc_id, content)
+
     result = {
         "document_id": doc_id,
         "auto_analysis": True,
         "keywords": keywords,
         "sentiment": sentiment,
+        "rag_chunks_added": chunks_added,
     }
     _analyses[doc_id] = result
     await publish_analysis_completed(doc_id, result)

@@ -1,7 +1,7 @@
 """LangChain chains for document analysis pipeline."""
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
-from langchain_core.runnables import RunnableSequence, RunnablePassthrough
+from langchain_core.runnables import RunnableSequence, RunnablePassthrough, RunnableParallel, RunnableLambda
 from pydantic import BaseModel, Field
 
 
@@ -45,3 +45,54 @@ def create_simple_chain(llm):
         "Summarize this document in 3 sentences:\n\n{document}"
     )
     return prompt | llm | StrOutputParser()
+
+
+def create_agent_chain(llm, tools):
+    """Create a LangChain agent that dynamically selects tools."""
+    try:
+        from langchain.agents import create_tool_calling_agent, AgentExecutor
+    except ImportError:
+        return None
+
+    agent_prompt = ChatPromptTemplate.from_messages([
+        ("system", """You are a senior document analyst with expertise in legal, financial, and compliance documents.
+
+You have access to tools for:
+- Extracting keywords from text
+- Detecting legal/financial risk terms
+- Analyzing sentiment
+- Counting document structure
+- Retrieving similar documents from the knowledge base
+
+Based on the document type and content, decide which tools to use. Not every document needs every tool.
+For legal documents: prioritize risk detection and keyword extraction.
+For financial documents: prioritize sentiment analysis and keyword extraction.
+For compliance documents: use all tools including RAG retrieval.
+
+After using tools, provide a comprehensive analysis in JSON format with:
+{{"summary": "3 sentences", "key_topics": ["list"], "sentiment": "pos/neg/neutral", "risk_level": "low/med/high", "action_items": ["list"], "tools_used": ["list of tools you called"]}}"""),
+        ("human", "Analyze this document:\n\n{document}"),
+        ("placeholder", "{agent_scratchpad}"),
+    ])
+
+    try:
+        agent = create_tool_calling_agent(llm, tools, agent_prompt)
+        executor = AgentExecutor(
+            agent=agent, tools=tools, verbose=True,
+            max_iterations=5, return_intermediate_steps=True
+        )
+        return executor
+    except Exception:
+        # Fallback: return None, caller will use manual chain
+        return None
+
+
+def create_composed_chain(llm):
+    """Create a composed chain with parallel fan-out."""
+    extract_chain = extract_prompt | llm | JsonOutputParser()
+
+    composed = RunnableParallel(
+        extraction=extract_chain,
+        quality=quality_prompt | llm | JsonOutputParser(),
+    )
+    return composed
