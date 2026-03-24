@@ -48,6 +48,11 @@ const T = {
     chainSteps: ['1. Document Ingestion', '2. Tool Analysis (Keywords, Risk, Sentiment)', '3. LangChain Extract Chain', '4. Quality Review Chain', '5. Report Generation'],
     demo: 'Live Demo',
     voice: 'Voice Assistant',
+    listeningForEvents: 'Listening for events...',
+    analyses: 'analyses',
+    tokens: 'tokens',
+    avgLatency: 'avg latency',
+    riskLevel: 'Risk Level',
   },
   es: {
     title: 'LangChain Pipeline',
@@ -85,6 +90,11 @@ const T = {
     chainSteps: ['1. Ingestion de Documento', '2. Analisis con Tools (Keywords, Riesgo, Sentimiento)', '3. LangChain Extract Chain', '4. Quality Review Chain', '5. Generacion de Reporte'],
     demo: 'Demo en Vivo',
     voice: 'Asistente de Voz',
+    listeningForEvents: 'Escuchando eventos...',
+    analyses: 'análisis',
+    tokens: 'tokens',
+    avgLatency: 'latencia prom',
+    riskLevel: 'Nivel de Riesgo',
   }
 }
 
@@ -274,6 +284,26 @@ td{padding:10px;font-size:14px;border-bottom:1px solid ${colors.border}22}
 .tab-panel{animation:tabFadeIn .3s ease forwards}
 .event-item-animated{animation:eventSlideIn .3s ease forwards}
 .chain-step-animated{animation:chainFadeIn .3s ease forwards}
+@keyframes counterPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+@keyframes liveDot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+@keyframes sparkDraw {
+  to { stroke-dashoffset: 0; }
+}
+.stat-chip{display:inline-flex;align-items:center;gap:6px;background:${colors.surface};border:1px solid ${colors.border};padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;color:${colors.text}}
+.stat-chip .live-dot{width:6px;height:6px;border-radius:50%;background:${colors.green};flex-shrink:0}
+.stat-chip .counter-value{display:inline-block}
+.counter-pop{animation:counterPop .3s ease}
 `
 
 /* --- Architecture SVG Diagram --- */
@@ -370,6 +400,84 @@ function ArchitectureSVG({ t, lang }) {
   )
 }
 
+/* --- Risk Gauge (SVG Radial) --- */
+function RiskGauge({ level }) {
+  const riskMap = { low: 0.2, medium: 0.5, high: 0.85 };
+  const colorMap = { low: '#10B981', medium: '#F59E0B', high: '#EF4444' };
+  const value = riskMap[level] || 0.5;
+  const color = colorMap[level] || '#F59E0B';
+  const circumference = 300 * (Math.PI / 180) * 45;
+  const offset = circumference * (1 - value);
+
+  return (
+    <svg viewBox="0 0 120 70" width="120" height="70">
+      <path d="M 15 60 A 45 45 0 1 1 105 60" fill="none" stroke="#1E293B" strokeWidth="8" strokeLinecap="round"/>
+      <path d="M 15 60 A 45 45 0 1 1 105 60" fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+        strokeDasharray={circumference} strokeDashoffset={offset}
+        style={{transition: 'stroke-dashoffset 0.8s ease'}}/>
+      <text x="60" y="50" textAnchor="middle" fill={color} fontSize="12" fontWeight="700">{level.toUpperCase()}</text>
+      <text x="60" y="63" textAnchor="middle" fill="#6B7280" fontSize="8">Risk Level</text>
+    </svg>
+  );
+}
+
+/* --- Skeleton Loading Shimmer --- */
+function SkeletonLoader() {
+  const shimmerStyle = {
+    background: 'linear-gradient(90deg, #1E293B 25%, #334155 50%, #1E293B 75%)',
+    backgroundSize: '800px 100%',
+    animation: 'shimmer 1.4s infinite linear',
+    borderRadius: 4,
+    height: 14,
+    marginBottom: 10,
+  };
+  return (
+    <div style={{padding: 20}}>
+      <div style={{...shimmerStyle, width: '60%', height: 20, marginBottom: 16}}/>
+      <div style={{...shimmerStyle, width: '100%'}}/>
+      <div style={{...shimmerStyle, width: '85%'}}/>
+      <div style={{...shimmerStyle, width: '70%'}}/>
+      <div style={{display:'flex', gap:12, marginTop:20}}>
+        <div style={{...shimmerStyle, width: 80, height: 80, borderRadius: 8}}/>
+        <div style={{flex:1}}>
+          <div style={{...shimmerStyle, width: '90%'}}/>
+          <div style={{...shimmerStyle, width: '60%'}}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* --- Spark Line --- */
+function SparkLine({ values, color, width=80, height=24 }) {
+  if (!values || values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = values.map((v, i) =>
+    `${(i / (values.length - 1)) * width},${height - ((v - min) / range) * (height - 4) - 2}`
+  ).join(' ');
+
+  const trend = values[values.length-1] > values[0] ? color : '#EF4444';
+
+  return (
+    <svg width={width} height={height} style={{verticalAlign:'middle',marginLeft:8}}>
+      <polyline points={points} fill="none" stroke={trend} strokeWidth="1.5"
+        strokeDasharray={width*2} strokeDashoffset={width*2}
+        style={{animation:'sparkDraw 1s ease forwards'}}/>
+    </svg>
+  );
+}
+
+/* --- Relative Time Helper --- */
+function toRelativeTime(timestamp) {
+  const diff = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
+  if (diff < 5) return 'just now';
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  return `${Math.floor(diff/3600)}h ago`;
+}
+
 /* --- App --- */
 export default function App() {
   const [lang, setLang] = useState('en')
@@ -383,7 +491,56 @@ export default function App() {
   const [chainStep, setChainStep] = useState(-1)
   const [stepProgress, setStepProgress] = useState(0)
   const [voiceOpen, setVoiceOpen] = useState(false)
+  const [analysisCount, setAnalysisCount] = useState(847)
+  const [tokenCount, setTokenCount] = useState(1200000)
+  const [latency, setLatency] = useState(340)
+  const [analysisPop, setAnalysisPop] = useState(false)
+  const [tokenPop, setTokenPop] = useState(false)
+  const [latencyPop, setLatencyPop] = useState(false)
+  const [, setTimeTick] = useState(0)
+  const [metricHistory, setMetricHistory] = useState({})
   const t = T[lang]
+
+  // Feature 6: Live Feed Counters
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAnalysisCount(c => c + Math.floor(Math.random() * 3) + 1)
+      setAnalysisPop(true)
+      setTimeout(() => setAnalysisPop(false), 300)
+    }, 5000 + Math.random() * 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTokenCount(c => c + Math.floor(Math.random() * 1501) + 500)
+      setTokenPop(true)
+      setTimeout(() => setTokenPop(false), 300)
+    }, 5000 + Math.random() * 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLatency(280 + Math.floor(Math.random() * 171))
+      setLatencyPop(true)
+      setTimeout(() => setLatencyPop(false), 300)
+    }, 5000 + Math.random() * 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Feature 9: Refresh relative timestamps
+  useEffect(() => {
+    const interval = setInterval(() => setTimeTick(t => t + 1), 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const formatAnalyses = (n) => n.toLocaleString()
+  const formatTokens = (n) => {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+    return String(n)
+  }
 
   const runAnalysis = useCallback(async () => {
     if (!selectedDoc) return
@@ -429,13 +586,23 @@ export default function App() {
 
     // Add metrics
     if (mode === 'full' && res.quality_review) {
+      const score = res.quality_review.score
       setMetrics(prev => {
         const aq = prev.analysis_quality || { count:0, total:0 }
         const ac = prev.analyses_completed || { count:0 }
         return {
           ...prev,
-          analysis_quality: { count: aq.count+1, total: aq.total + res.quality_review.score, mean: ((aq.total+res.quality_review.score)/(aq.count+1)).toFixed(1), min: Math.min(aq.min||10, res.quality_review.score), max: Math.max(aq.max||0, res.quality_review.score) },
+          analysis_quality: { count: aq.count+1, total: aq.total + score, mean: ((aq.total+score)/(aq.count+1)).toFixed(1), min: Math.min(aq.min||10, score), max: Math.max(aq.max||0, score) },
           analyses_completed: { count: ac.count+1 },
+        }
+      })
+      setMetricHistory(prev => {
+        const aqHist = prev.analysis_quality || []
+        const acHist = prev.analyses_completed || []
+        return {
+          ...prev,
+          analysis_quality: [...aqHist, score].slice(-10),
+          analyses_completed: [...acHist, (prev.analyses_completed?.length || 0) + 1].slice(-10),
         }
       })
     }
@@ -458,6 +625,21 @@ export default function App() {
             <button className="lang-toggle" onClick={() => setLang(l => l === 'en' ? 'es' : 'en')}>
               {lang === 'en' ? 'ES' : 'EN'}
             </button>
+            <span className="stat-chip">
+              <span className="live-dot" style={{animation:'liveDot 2s infinite'}}/>
+              <span className={`counter-value ${analysisPop ? 'counter-pop' : ''}`}>{formatAnalyses(analysisCount)}</span>
+              <span style={{color:colors.textMuted,fontWeight:400}}>{t.analyses}</span>
+            </span>
+            <span className="stat-chip">
+              <span className="live-dot" style={{animation:'liveDot 2s infinite',animationDelay:'0.6s'}}/>
+              <span className={`counter-value ${tokenPop ? 'counter-pop' : ''}`}>{formatTokens(tokenCount)}</span>
+              <span style={{color:colors.textMuted,fontWeight:400}}>{t.tokens}</span>
+            </span>
+            <span className="stat-chip">
+              <span className="live-dot" style={{animation:'liveDot 2s infinite',animationDelay:'1.2s'}}/>
+              <span className={`counter-value ${latencyPop ? 'counter-pop' : ''}`}>{latency}ms</span>
+              <span style={{color:colors.textMuted,fontWeight:400}}>{t.avgLatency}</span>
+            </span>
           </div>
         </div>
 
@@ -564,6 +746,13 @@ export default function App() {
               </div>
             )}
 
+            {/* Skeleton Loading */}
+            {loading && !result && (
+              <div className="card">
+                <SkeletonLoader />
+              </div>
+            )}
+
             {/* Results */}
             {result && (
               <div className="card" style={{animation:'chainFadeIn .4s ease'}}>
@@ -611,7 +800,10 @@ export default function App() {
                       </div>
                       <div className="result-section">
                         <h4>{t.sentiment} / {t.risk}</h4>
-                        <p><span className={`sentiment-${result.analysis?.sentiment}`} style={{fontWeight:600}}>{result.analysis?.sentiment}</span> &nbsp;|&nbsp; <span className={`risk-${result.analysis?.risk_level}`} style={{fontWeight:600}}>{result.analysis?.risk_level}</span></p>
+                        <div style={{display:'flex',alignItems:'center',gap:16}}>
+                          <p><span className={`sentiment-${result.analysis?.sentiment}`} style={{fontWeight:600}}>{result.analysis?.sentiment}</span> &nbsp;|&nbsp; <span className={`risk-${result.analysis?.risk_level}`} style={{fontWeight:600}}>{result.analysis?.risk_level}</span></p>
+                          {result.analysis?.risk_level && <RiskGauge level={result.analysis.risk_level} />}
+                        </div>
                       </div>
                     </div>
                     <div className="result-section" style={{marginTop:12}}>
@@ -645,12 +837,18 @@ export default function App() {
         {tab === 'events' && (
           <div className="card tab-panel" key="events">
             <h3>Event Log ({events.length} events)</h3>
+            <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',borderBottom:'1px solid #1E293B'}}>
+              <span style={{width:6,height:6,borderRadius:'50%',background:'#10B981',animation:'liveDot 2s infinite'}}/>
+              <span style={{color:'#6B7280',fontSize:12}}>{t.listeningForEvents}</span>
+            </div>
             {events.length === 0 ? (
               <div className="empty-state">{t.noEvents}</div>
             ) : (
               events.map((evt, i) => (
                 <div key={evt.id || i} className="event-item event-item-animated" style={{animationDelay:`${i * 0.05}s`}}>
-                  <span className="event-time">{new Date(evt.timestamp).toLocaleTimeString()}</span>
+                  <span className="event-time" title={new Date(evt.timestamp).toLocaleTimeString()}>
+                    {toRelativeTime(evt.timestamp)}
+                  </span>
                   <span className="event-topic">{evt.topic}</span>
                   <span className="event-payload">
                     {Object.entries(evt.payload).filter(([k]) => k !== 'content').map(([k, v]) => (
@@ -690,7 +888,10 @@ export default function App() {
                       <tr key={name}>
                         <td style={{fontWeight:600}}>{name}</td>
                         <td>{m.count}</td>
-                        <td>{m.mean || '-'}</td>
+                        <td>
+                          {m.mean || '-'}
+                          {metricHistory[name] && <SparkLine values={metricHistory[name]} color="#10B981" />}
+                        </td>
                         <td>{m.min || '-'}</td>
                         <td>{m.max || '-'}</td>
                       </tr>
