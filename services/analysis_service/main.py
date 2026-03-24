@@ -2,6 +2,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import json
+import asyncio
 
 from .chains import create_analysis_chain, create_simple_chain, create_agent_chain, create_composed_chain, create_chains_from_registry
 from .tools import extract_keywords, detect_risk_terms, analyze_sentiment_basic, count_sections, ANALYSIS_TOOLS
@@ -16,6 +17,20 @@ metrics = MetricsTracker()
 logger = StructuredLogger()
 _analyses: dict[str, dict] = {}
 _prompt_registry = None
+
+
+async def run_tools_parallel(content: str) -> dict:
+    """Run all analysis tools in parallel."""
+    loop = asyncio.get_event_loop()
+    keywords_task = loop.run_in_executor(None, lambda: extract_keywords.invoke(content))
+    risks_task = loop.run_in_executor(None, lambda: detect_risk_terms.invoke(content))
+    sentiment_task = loop.run_in_executor(None, lambda: analyze_sentiment_basic.invoke(content))
+    structure_task = loop.run_in_executor(None, lambda: count_sections.invoke(content))
+
+    keywords, risks, sentiment, structure = await asyncio.gather(
+        keywords_task, risks_task, sentiment_task, structure_task
+    )
+    return {"keywords": keywords, "risks": risks, "sentiment": sentiment, "structure": structure}
 
 
 def set_prompt_registry(registry):
@@ -33,17 +48,13 @@ class AnalyzeRequest(BaseModel):
 async def analyze_document(body: AnalyzeRequest):
     llm = get_llm()
 
-    # Run tools first
-    keywords = extract_keywords.invoke(body.content)
-    risk_terms = detect_risk_terms.invoke(body.content)
-    sentiment = analyze_sentiment_basic.invoke(body.content)
-    structure = count_sections.invoke(body.content)
-
+    # Run tools in parallel
+    parallel_results = await run_tools_parallel(body.content)
     tool_results = {
-        "keywords": keywords,
-        "risk_terms": risk_terms,
-        "sentiment": sentiment,
-        "structure": structure,
+        "keywords": parallel_results["keywords"],
+        "risk_terms": parallel_results["risks"],
+        "sentiment": parallel_results["sentiment"],
+        "structure": parallel_results["structure"],
     }
 
     if body.mode == "quick":

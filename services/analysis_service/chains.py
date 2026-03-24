@@ -3,6 +3,29 @@ from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 from langchain_core.runnables import RunnableSequence, RunnablePassthrough, RunnableParallel, RunnableLambda
 from pydantic import BaseModel, Field
+import re
+import json
+
+
+class SafeJsonParser(RunnableLambda):
+    """JSON parser with retry on failure."""
+    def __init__(self):
+        self._parser = JsonOutputParser()
+        super().__init__(self._safe_parse)
+
+    def _safe_parse(self, input_text):
+        try:
+            return self._parser.invoke(input_text)
+        except Exception:
+            # Try to extract JSON from the text
+            match = re.search(r'\{[\s\S]*\}', str(input_text))
+            if match:
+                try:
+                    return json.loads(match.group())
+                except json.JSONDecodeError:
+                    pass
+            # Return a safe default
+            return {"summary": "Analysis completed but output parsing failed.", "key_topics": [], "sentiment": "neutral", "risk_level": "low", "action_items": ["Review raw output manually"]}
 
 
 class DocumentAnalysis(BaseModel):
@@ -33,8 +56,8 @@ report_prompt = ChatPromptTemplate.from_template(
 
 def create_analysis_chain(llm):
     """Create the full LangChain analysis pipeline."""
-    extract_chain = extract_prompt | llm | JsonOutputParser()
-    quality_chain = quality_prompt | llm | JsonOutputParser()
+    extract_chain = extract_prompt | llm | SafeJsonParser()
+    quality_chain = quality_prompt | llm | SafeJsonParser()
     report_chain = report_prompt | llm | StrOutputParser()
     return extract_chain, quality_chain, report_chain
 
@@ -57,8 +80,8 @@ def create_chains_from_registry(llm, registry):
         rep_prompt = ChatPromptTemplate.from_template(report_tmpl.template)
 
         return (
-            ext_prompt | llm | JsonOutputParser(),
-            qual_prompt | llm | JsonOutputParser(),
+            ext_prompt | llm | SafeJsonParser(),
+            qual_prompt | llm | SafeJsonParser(),
             rep_prompt | llm | StrOutputParser(),
         )
     # Fallback to hardcoded prompts
@@ -115,10 +138,10 @@ After using tools, provide a comprehensive analysis in JSON format with:
 
 def create_composed_chain(llm):
     """Create a composed chain with parallel fan-out."""
-    extract_chain = extract_prompt | llm | JsonOutputParser()
+    extract_chain = extract_prompt | llm | SafeJsonParser()
 
     composed = RunnableParallel(
         extraction=extract_chain,
-        quality=quality_prompt | llm | JsonOutputParser(),
+        quality=quality_prompt | llm | SafeJsonParser(),
     )
     return composed

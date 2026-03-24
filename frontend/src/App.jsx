@@ -1,5 +1,15 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 
+/* --- SVG Icons (24x24, stroke-based) --- */
+const SvgIcons = {
+  globe: <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>,
+  document: <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>,
+  beaker: <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.5L4 20h16L14 9.5V3"/></svg>,
+  chart: <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>,
+  lightning: <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
+  trendUp: <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>,
+}
+
 /* --- i18n --- */
 const T = {
   en: {
@@ -36,7 +46,7 @@ const T = {
     services: { doc: 'Document Service', analysis: 'Analysis Service', report: 'Report Service', bus: 'Event Bus', mlops: 'MLOps Layer', gateway: 'API Gateway' },
     archDesc: 'Three microservices communicate through an in-memory event bus. The API Gateway unifies all endpoints. MLOps layer tracks prompts, metrics, and logs.',
     chainSteps: ['1. Document Ingestion', '2. Tool Analysis (Keywords, Risk, Sentiment)', '3. LangChain Extract Chain', '4. Quality Review Chain', '5. Report Generation'],
-    demo: 'Demo Mode',
+    demo: 'Live Demo',
     voice: 'Voice Assistant',
   },
   es: {
@@ -73,7 +83,7 @@ const T = {
     services: { doc: 'Servicio de Documentos', analysis: 'Servicio de Analisis', report: 'Servicio de Reportes', bus: 'Event Bus', mlops: 'Capa MLOps', gateway: 'API Gateway' },
     archDesc: 'Tres microservicios se comunican a traves de un event bus en memoria. El API Gateway unifica todos los endpoints. La capa MLOps rastrea prompts, metricas y logs.',
     chainSteps: ['1. Ingestion de Documento', '2. Analisis con Tools (Keywords, Riesgo, Sentimiento)', '3. LangChain Extract Chain', '4. Quality Review Chain', '5. Generacion de Reporte'],
-    demo: 'Modo Demo',
+    demo: 'Demo en Vivo',
     voice: 'Asistente de Voz',
   }
 }
@@ -257,6 +267,11 @@ td{padding:10px;font-size:14px;border-bottom:1px solid ${colors.border}22}
   0%, 100% { filter: drop-shadow(0 0 0 transparent); }
   50% { filter: drop-shadow(0 0 6px rgba(59,130,246,0.5)); }
 }
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tab-panel{animation:tabFadeIn .3s ease forwards}
 .event-item-animated{animation:eventSlideIn .3s ease forwards}
 .chain-step-animated{animation:chainFadeIn .3s ease forwards}
 `
@@ -265,12 +280,12 @@ td{padding:10px;font-size:14px;border-bottom:1px solid ${colors.border}22}
 function ArchitectureSVG({ t, lang }) {
   const [hovered, setHovered] = useState(null)
   const boxes = [
-    { id:'gateway', x:340, y:20, w:160, h:60, label:t.services.gateway, desc:'FastAPI unified API routing', color:colors.amber, icon:'GW' },
-    { id:'doc', x:60, y:140, w:160, h:60, label:t.services.doc, desc:'CRUD + Pydantic validation', color:colors.blue, icon:'DOC' },
-    { id:'analysis', x:340, y:140, w:160, h:60, label:t.services.analysis, desc:'LangChain + Tools + Bedrock', color:colors.blue, icon:'AI' },
-    { id:'report', x:620, y:140, w:160, h:60, label:t.services.report, desc:'Report generation', color:colors.blue, icon:'RPT' },
-    { id:'bus', x:200, y:260, w:440, h:50, label:t.services.bus, desc:'In-memory pub/sub (Redis-like)', color:colors.green, icon:'BUS' },
-    { id:'mlops', x:200, y:340, w:440, h:50, label:t.services.mlops, desc:'Prompt Registry + Metrics + Logger', color:colors.green, icon:'OPS' },
+    { id:'gateway', x:340, y:20, w:160, h:60, label:t.services.gateway, desc:'FastAPI unified API routing', color:colors.amber, svgIcon:'globe' },
+    { id:'doc', x:60, y:140, w:160, h:60, label:t.services.doc, desc:'CRUD + Pydantic validation', color:colors.blue, svgIcon:'document' },
+    { id:'analysis', x:340, y:140, w:160, h:60, label:t.services.analysis, desc:'LangChain + Tools + Bedrock', color:colors.blue, svgIcon:'beaker' },
+    { id:'report', x:620, y:140, w:160, h:60, label:t.services.report, desc:'Report generation', color:colors.blue, svgIcon:'chart' },
+    { id:'bus', x:200, y:260, w:440, h:50, label:t.services.bus, desc:'In-memory pub/sub (Redis-like)', color:colors.green, svgIcon:'lightning' },
+    { id:'mlops', x:200, y:340, w:440, h:50, label:t.services.mlops, desc:'Prompt Registry + Metrics + Logger', color:colors.green, svgIcon:'trendUp' },
   ]
 
   const arrows = [
@@ -325,8 +340,13 @@ function ArchitectureSVG({ t, lang }) {
               strokeWidth={isHovered ? 2.5 : 1.5}
               style={{transition:'all .2s', filter: isHovered ? `drop-shadow(0 0 8px ${b.color}66)` : 'none'}}
             />
-            <text x={b.x + b.w/2} y={b.y + b.h/2 - 6} textAnchor="middle" fill={colors.text} fontSize="13" fontWeight="600">{b.label}</text>
-            <text x={b.x + b.w/2} y={b.y + b.h/2 + 12} textAnchor="middle" fill={colors.textMuted} fontSize="10">{b.desc}</text>
+            <foreignObject x={b.x + 8} y={b.y + (b.h/2 - 12)} width="24" height="24">
+              <div xmlns="http://www.w3.org/1999/xhtml" style={{color: b.color, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                {SvgIcons[b.svgIcon]}
+              </div>
+            </foreignObject>
+            <text x={b.x + b.w/2 + 12} y={b.y + b.h/2 - 6} textAnchor="middle" fill={colors.text} fontSize="13" fontWeight="600">{b.label}</text>
+            <text x={b.x + b.w/2 + 12} y={b.y + b.h/2 + 12} textAnchor="middle" fill={colors.textMuted} fontSize="10">{b.desc}</text>
             {isHovered && (
               <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="10"
                 fill="transparent" stroke={b.color} strokeWidth="2"
@@ -450,7 +470,7 @@ export default function App() {
 
         {/* Architecture Tab */}
         {tab === 'arch' && (
-          <div>
+          <div className="tab-panel" key="arch">
             <div className="card">
               <h3>Microservices Architecture</h3>
               <p style={{color:colors.textMuted,marginBottom:16,fontSize:14}}>{t.archDesc}</p>
@@ -470,7 +490,7 @@ export default function App() {
 
         {/* Pipeline Tab */}
         {tab === 'pipeline' && (
-          <div>
+          <div className="tab-panel" key="pipeline">
             <div className="card">
               <h3>{t.selectDoc}</h3>
               <div className="grid3">
@@ -562,12 +582,26 @@ export default function App() {
                       </div>
                       <div className="result-section">
                         <h4>{t.qualityScore}</h4>
-                        <div style={{display:'flex',alignItems:'center',gap:12}}>
-                          <div className={`score-badge ${result.quality_review?.score >= 8 ? 'score-high' : result.quality_review?.score >= 5 ? 'score-mid' : 'score-low'}`}>
-                            {result.quality_review?.score}
-                          </div>
-                          <span style={{color:colors.textMuted,fontSize:13}}>/10</span>
-                        </div>
+                        {(() => {
+                          const score = result.quality_review?.score || 0
+                          const barColor = score >= 8 ? colors.green : score >= 6 ? colors.amber : colors.red
+                          return (
+                            <div style={{display:'flex',alignItems:'center',gap:12}}>
+                              <div style={{display:'flex',gap:3}}>
+                                {[1,2,3,4,5,6,7,8,9,10].map(tick => (
+                                  <div key={tick} style={{
+                                    width:8, height:24, borderRadius:2,
+                                    background: tick <= score ? barColor : colors.surfaceLight,
+                                    border: `1px solid ${tick <= score ? barColor : colors.border}`,
+                                    transition:'all .3s ease'
+                                  }} />
+                                ))}
+                              </div>
+                              <span style={{fontWeight:700,fontSize:18,color:barColor}}>{score}</span>
+                              <span style={{color:colors.textMuted,fontSize:13}}>/10</span>
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
                     <div className="grid2" style={{marginTop:12}}>
@@ -609,7 +643,7 @@ export default function App() {
 
         {/* Events Tab */}
         {tab === 'events' && (
-          <div className="card">
+          <div className="card tab-panel" key="events">
             <h3>Event Log ({events.length} events)</h3>
             {events.length === 0 ? (
               <div className="empty-state">{t.noEvents}</div>
@@ -618,7 +652,11 @@ export default function App() {
                 <div key={evt.id || i} className="event-item event-item-animated" style={{animationDelay:`${i * 0.05}s`}}>
                   <span className="event-time">{new Date(evt.timestamp).toLocaleTimeString()}</span>
                   <span className="event-topic">{evt.topic}</span>
-                  <span className="event-payload">{JSON.stringify(evt.payload)}</span>
+                  <span className="event-payload">
+                    {Object.entries(evt.payload).filter(([k]) => k !== 'content').map(([k, v]) => (
+                      <span key={k} style={{marginRight:8}}>{k}: <strong>{String(v).slice(0,50)}</strong></span>
+                    ))}
+                  </span>
                 </div>
               ))
             )}
@@ -627,7 +665,7 @@ export default function App() {
 
         {/* MLOps Tab */}
         {tab === 'mlops' && (
-          <div>
+          <div className="tab-panel" key="mlops">
             <div className="card">
               <h3>Prompt Registry</h3>
               <table>
