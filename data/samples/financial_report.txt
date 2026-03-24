@@ -1,0 +1,48 @@
+QUARTERLY FINANCIAL REPORT - Q4 2024
+Nextera Digital Holdings Inc.
+Period: October 1 - December 31, 2024
+
+EXECUTIVE SUMMARY
+Nextera Digital Holdings delivered strong financial performance in Q4 2024, driven by
+robust growth in our cloud services division and successful expansion into the APAC market.
+Total revenue reached $128.5 million, representing a 23% year-over-year increase.
+
+REVENUE BREAKDOWN
+- Cloud Services: $72.3M (up 31% YoY) - Our flagship segment continues to benefit from
+  enterprise migration trends and increased adoption of AI-powered solutions.
+- Consulting: $34.2M (up 12% YoY) - Growth driven by demand for digital transformation
+  advisory services.
+- Licensing: $22.0M (up 8% YoY) - Steady performance with improved renewal rates at 94%.
+
+PROFITABILITY
+- Gross Profit: $89.9M (gross margin: 70.0%, up from 67.2%)
+- Operating Income: $32.1M (operating margin: 25.0%)
+- Net Income: $24.6M (net margin: 19.1%)
+- EBITDA: $38.4M (EBITDA margin: 29.9%)
+
+KEY METRICS
+- Monthly Recurring Revenue (MRR): $24.1M (up 28% YoY)
+- Customer Acquisition Cost (CAC): $3,200 (down 15% from Q3)
+- Customer Lifetime Value (CLV): $48,500 (up 22% YoY)
+- Net Revenue Retention: 118% (industry-leading)
+- Employee Count: 1,247 (up from 1,089 in Q4 2023)
+
+BALANCE SHEET HIGHLIGHTS
+- Total Assets: $412M
+- Cash & Equivalents: $89.2M
+- Total Debt: $45.0M (debt-to-equity ratio: 0.18)
+- Working Capital: $67.3M
+
+OUTLOOK AND GUIDANCE
+For FY 2025, we project revenue of $550-580M (28-35% growth), driven by continued cloud
+adoption, the launch of our AI Analytics Platform in Q2, and expansion into European markets.
+We expect operating margins to improve to 27-29% as we achieve greater economies of scale.
+
+RISK FACTORS
+- Macroeconomic uncertainty could impact enterprise IT spending
+- Competitive pressure from hyperscaler cloud providers
+- Talent acquisition challenges in key technical roles
+- Regulatory changes in data privacy across operating jurisdictions
+
+The Board has approved a share buyback program of up to $25M for FY 2025, reflecting
+confidence in the company's growth trajectory and strong cash position.

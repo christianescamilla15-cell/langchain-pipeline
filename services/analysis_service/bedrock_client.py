@@ -1,0 +1,158 @@
+"""AWS Bedrock client with mock fallback for demo mode."""
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.outputs import ChatResult, ChatGeneration
+from typing import Any, Optional
+import os
+import json
+import re
+
+
+class MockBedrockLLM(BaseChatModel):
+    """Mock LLM that simulates Bedrock Claude responses for demo mode.
+    Used when no AWS credentials or Anthropic API key is available."""
+
+    model_name: str = "mock-bedrock-claude"
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: Optional[list[str]] = None,
+        **kwargs,
+    ) -> ChatResult:
+        last_msg = messages[-1].content if messages else ""
+
+        # Detect what kind of response is needed
+        all_text = str(messages)
+        if "quality" in last_msg.lower() or "review" in last_msg.lower() or "Rate quality" in all_text:
+            response = json.dumps(
+                {
+                    "score": 8,
+                    "improvements": [
+                        "Add more specific metrics",
+                        "Include timeline estimates",
+                    ],
+                }
+            )
+        elif "JSON" in all_text or "json" in last_msg.lower():
+            response = self._generate_json_response(last_msg)
+        elif "summarize" in last_msg.lower() or "summary" in last_msg.lower():
+            response = self._generate_summary(last_msg)
+        elif "report" in last_msg.lower():
+            response = self._generate_report(last_msg)
+        else:
+            response = (
+                "Analysis complete. The document has been processed successfully."
+            )
+
+        return ChatResult(
+            generations=[ChatGeneration(message=AIMessage(content=response))]
+        )
+
+    def _generate_json_response(self, text: str) -> str:
+        words = text.split()
+        word_count = len(words)
+        has_risk = any(
+            w in text.lower()
+            for w in ["liability", "breach", "penalty", "risk"]
+        )
+        sentiment = "negative" if has_risk else "positive"
+        risk = "high" if has_risk else "low"
+
+        stop = {
+            "the", "a", "an", "is", "are", "was", "were", "this", "that",
+            "and", "or", "for", "to", "of", "in", "on", "with",
+        }
+        kw = [
+            w.lower()
+            for w in re.findall(r"\b[A-Za-z]{4,}\b", text)
+            if w.lower() not in stop
+        ]
+        from collections import Counter
+
+        top_kw = [w for w, _ in Counter(kw).most_common(5)]
+
+        return json.dumps(
+            {
+                "summary": f"Document contains {word_count} words. "
+                f"{'Risk factors detected.' if has_risk else 'No significant risks found.'} "
+                f"Overall tone is {sentiment}.",
+                "key_topics": top_kw[:5]
+                if top_kw
+                else ["general", "document", "analysis", "content", "review"],
+                "sentiment": sentiment,
+                "risk_level": risk,
+                "action_items": [
+                    "Review document for compliance requirements",
+                    "Schedule follow-up review in 30 days",
+                    "Share findings with stakeholders",
+                ],
+            }
+        )
+
+    def _generate_summary(self, text: str) -> str:
+        sentences = [
+            s.strip() for s in re.split(r"[.!?]+", text) if len(s.strip()) > 20
+        ]
+        if len(sentences) >= 3:
+            return ". ".join(sentences[:3]) + "."
+        return (
+            "The document has been analyzed. "
+            "Key information has been extracted. "
+            "Recommendations are provided below."
+        )
+
+    def _generate_report(self, text: str) -> str:
+        return json.dumps(
+            {
+                "title": "Document Analysis Report",
+                "executive_summary": "The document has been thoroughly analyzed by the AI pipeline.",
+                "findings": [
+                    "Document structure is well-organized",
+                    "Key terms and entities identified",
+                    "Risk assessment completed",
+                ],
+                "recommendations": [
+                    "Review flagged items with legal team",
+                    "Implement suggested improvements",
+                    "Schedule periodic re-analysis",
+                ],
+                "risk_assessment": "Moderate - standard business document with typical provisions",
+            }
+        )
+
+    @property
+    def _llm_type(self) -> str:
+        return "mock-bedrock"
+
+
+def get_llm():
+    """Get the appropriate LLM based on available credentials."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    aws_region = os.environ.get("AWS_DEFAULT_REGION", "")
+
+    # Try Anthropic API first
+    if api_key and api_key != "":
+        try:
+            from langchain_anthropic import ChatAnthropic
+
+            return ChatAnthropic(
+                model="claude-sonnet-4-20250514", api_key=api_key, max_tokens=2000
+            )
+        except ImportError:
+            pass
+
+    # Try AWS Bedrock
+    if aws_region:
+        try:
+            from langchain_aws import ChatBedrock
+
+            return ChatBedrock(
+                model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+                region_name=aws_region,
+            )
+        except (ImportError, Exception):
+            pass
+
+    # Fallback to mock
+    return MockBedrockLLM()
