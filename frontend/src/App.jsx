@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 
 /* --- SVG Icons (24x24, stroke-based) --- */
 const SvgIcons = {
@@ -53,6 +53,17 @@ const T = {
     tokens: 'tokens',
     avgLatency: 'avg latency',
     riskLevel: 'Risk Level',
+    microservicesArch: 'Microservices Architecture',
+    techStack: 'Tech Stack',
+    backend: 'Backend',
+    frontend: 'Frontend',
+    mlopsLabel: 'MLOps',
+    processing: 'Processing',
+    done: 'Done',
+    eventLogTitle: 'Event Log',
+    events: 'events',
+    promptRegistry: 'Prompt Registry',
+    qualityMetrics: 'Quality Metrics',
   },
   es: {
     title: 'LangChain Pipeline',
@@ -95,6 +106,17 @@ const T = {
     tokens: 'tokens',
     avgLatency: 'latencia prom',
     riskLevel: 'Nivel de Riesgo',
+    microservicesArch: 'Arquitectura de Microservicios',
+    techStack: 'Stack Tecnológico',
+    backend: 'Backend',
+    frontend: 'Frontend',
+    mlopsLabel: 'MLOps',
+    processing: 'Procesando',
+    done: 'Completado',
+    eventLogTitle: 'Registro de Eventos',
+    events: 'eventos',
+    promptRegistry: 'Registro de Prompts',
+    qualityMetrics: 'Métricas de Calidad',
   }
 }
 
@@ -478,6 +500,161 @@ function toRelativeTime(timestamp) {
   return `${Math.floor(diff/3600)}h ago`;
 }
 
+/* --- Tour Steps --- */
+const TOUR_STEPS = [
+  {
+    type: 'modal',
+    title: { en: 'LangChain Document Intelligence Pipeline', es: 'Pipeline de Inteligencia Documental con LangChain' },
+    text: {
+      en: "This platform analyzes documents using a microservices architecture with LangChain AI agents, RAG retrieval, and real-time MLOps monitoring. Upload a document and watch 5 chain steps process it with anomaly detection, sentiment analysis, and risk assessment.\n\nLet me give you a guided tour!",
+      es: "Esta plataforma analiza documentos usando arquitectura de microservicios con agentes IA de LangChain, b\u00fasqueda RAG, y monitoreo MLOps en tiempo real. Sube un documento y observa c\u00f3mo 5 pasos de cadena lo procesan con detecci\u00f3n de anomal\u00edas, an\u00e1lisis de sentimiento, y evaluaci\u00f3n de riesgo.\n\n\u00a1D\u00e9jame darte un tour guiado!"
+    },
+    btn: { en: 'Start Tour \u2192', es: 'Iniciar Tour \u2192' },
+  },
+  {
+    type: 'highlight',
+    target: 'architecture',
+    text: {
+      en: 'This diagram shows the 3 microservices (Document, Analysis, Report) connected through an Event Bus, with an MLOps monitoring layer tracking prompts and metrics.',
+      es: 'Este diagrama muestra los 3 microservicios (Documentos, An\u00e1lisis, Reportes) conectados a trav\u00e9s de un Event Bus, con una capa MLOps monitoreando prompts y m\u00e9tricas.'
+    },
+    btn: { en: 'Next \u2192', es: 'Siguiente \u2192' },
+  },
+  {
+    type: 'highlight',
+    target: 'doc-select',
+    text: {
+      en: 'Choose from 3 sample documents: a Service Agreement, a Q4 Financial Report, or a GDPR Compliance Assessment. Each triggers different analysis patterns.',
+      es: 'Elige entre 3 documentos de ejemplo: un Acuerdo de Servicios, un Reporte Financiero Q4, o una Evaluaci\u00f3n de Cumplimiento GDPR. Cada uno activa diferentes patrones de an\u00e1lisis.'
+    },
+    btn: { en: 'Try it \u2192', es: 'Pru\u00e9balo \u2192' },
+    action: 'selectFinancial',
+  },
+  {
+    type: 'highlight',
+    target: 'run-analysis',
+    text: {
+      en: 'Quick mode runs 2 chain steps for a fast summary. Full Pipeline mode runs all 5 steps including quality review and report generation.',
+      es: 'El modo R\u00e1pido ejecuta 2 pasos para un resumen r\u00e1pido. El modo Pipeline Completo ejecuta los 5 pasos incluyendo revisi\u00f3n de calidad y generaci\u00f3n de reporte.'
+    },
+    btn: { en: 'Run Full Analysis \u2192', es: 'Ejecutar An\u00e1lisis Completo \u2192' },
+    action: 'runFull',
+  },
+  {
+    type: 'highlight',
+    target: 'results',
+    text: {
+      en: 'Results include an executive summary, keyword extraction, sentiment analysis, and a risk gauge. The quality score shows LangChain\'s self-evaluation of the analysis.',
+      es: 'Los resultados incluyen resumen ejecutivo, extracci\u00f3n de palabras clave, an\u00e1lisis de sentimiento, y medidor de riesgo. El puntaje de calidad muestra la autoevaluaci\u00f3n de LangChain.'
+    },
+    btn: { en: 'Next \u2192', es: 'Siguiente \u2192' },
+  },
+  {
+    type: 'highlight',
+    target: 'events-tab',
+    text: {
+      en: 'The Event Log shows real-time events flowing through the Event Bus. Every document creation, analysis, and report generation emits events here.',
+      es: 'El Log de Eventos muestra eventos en tiempo real fluyendo por el Event Bus. Cada creaci\u00f3n de documento, an\u00e1lisis y generaci\u00f3n de reporte emite eventos aqu\u00ed.'
+    },
+    btn: { en: 'Next \u2192', es: 'Siguiente \u2192' },
+    action: 'switchEvents',
+  },
+  {
+    type: 'highlight',
+    target: 'mlops-tab',
+    text: {
+      en: 'The MLOps Dashboard tracks versioned prompts in the Prompt Registry and aggregates quality metrics with spark lines showing trends over time.',
+      es: 'El Dashboard MLOps rastrea prompts versionados en el Registro de Prompts y agrega m\u00e9tricas de calidad con spark lines mostrando tendencias.'
+    },
+    btn: { en: 'Finish Tour \u2713', es: 'Finalizar Tour \u2713' },
+    action: 'switchMlops',
+  },
+]
+
+/* --- Tour Overlay Component --- */
+function TourOverlay({ step, lang, setLang, onNext, onClose }) {
+  const s = TOUR_STEPS[step]
+  if (!s) return null
+
+  const overlayStyle = {
+    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+    background: 'rgba(0,0,0,0.7)', zIndex: 9999,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  }
+
+  const modalStyle = {
+    background: colors.surface, border: `1px solid ${colors.border}`,
+    borderRadius: 16, padding: 32, maxWidth: 520, width: '90%',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.5)', position: 'relative',
+  }
+
+  const tooltipBase = {
+    background: colors.surface, border: `1px solid ${colors.border}`,
+    borderRadius: 12, padding: 20, maxWidth: 400, width: '90%',
+    boxShadow: '0 12px 40px rgba(0,0,0,0.5)', position: 'absolute', zIndex: 10000,
+  }
+
+  if (s.type === 'modal') {
+    return (
+      <div style={overlayStyle}>
+        <div style={modalStyle}>
+          <h2 style={{fontSize:22,marginBottom:12,background:`linear-gradient(135deg,${colors.blue},${colors.green})`,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>
+            {s.title[lang]}
+          </h2>
+          <p style={{color:colors.textMuted,fontSize:14,lineHeight:1.7,whiteSpace:'pre-line',marginBottom:20}}>
+            {s.text[lang]}
+          </p>
+          <div style={{display:'flex',gap:8,marginBottom:16}}>
+            <button onClick={() => setLang('en')} style={{padding:'6px 16px',borderRadius:6,border:`1px solid ${lang==='en'?colors.blue:colors.border}`,background:lang==='en'?colors.blue:'transparent',color:colors.text,cursor:'pointer',fontWeight:600}}>EN</button>
+            <button onClick={() => setLang('es')} style={{padding:'6px 16px',borderRadius:6,border:`1px solid ${lang==='es'?colors.blue:colors.border}`,background:lang==='es'?colors.blue:'transparent',color:colors.text,cursor:'pointer',fontWeight:600}}>ES</button>
+          </div>
+          <button onClick={onNext} style={{padding:'10px 28px',borderRadius:8,border:'none',background:colors.blue,color:'white',cursor:'pointer',fontWeight:600,fontSize:15}}>{s.btn[lang]}</button>
+        </div>
+      </div>
+    )
+  }
+
+  // Highlight type: position tooltip near target element
+  const targetEl = document.querySelector(`[data-tour="${s.target}"]`)
+
+  // Scroll target into view
+  if (targetEl) {
+    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  const rect = targetEl ? targetEl.getBoundingClientRect() : null
+
+  return (
+    <div style={{position:'fixed',top:0,left:0,width:'100%',height:'100%',zIndex:9998}} onClick={e => { if(e.target===e.currentTarget) onClose() }}>
+      {/* Dark overlay with cutout */}
+      <div style={{position:'fixed',top:0,left:0,width:'100%',height:'100%',background:'rgba(0,0,0,0.6)',zIndex:9998}} />
+      {/* Highlight border around target */}
+      {rect && (
+        <div style={{
+          position:'fixed', left:rect.left-4, top:rect.top-4,
+          width:rect.width+8, height:rect.height+8,
+          border:`2px solid ${colors.blue}`, borderRadius:14,
+          boxShadow:`0 0 0 9999px rgba(0,0,0,0.6), 0 0 20px ${colors.blue}55`,
+          zIndex:9999, pointerEvents:'none',
+        }} />
+      )}
+      {/* Tooltip */}
+      <div style={{
+        ...tooltipBase,
+        left: rect ? Math.min(Math.max(rect.left, 16), window.innerWidth - 420) : '50%',
+        top: rect ? Math.min(rect.bottom + 12, window.innerHeight - 200) : '50%',
+        transform: rect ? 'none' : 'translate(-50%,-50%)',
+      }}>
+        <p style={{color:colors.textMuted,fontSize:14,lineHeight:1.7,marginBottom:16}}>{s.text[lang]}</p>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span style={{color:colors.textMuted,fontSize:12}}>{step + 1} / {TOUR_STEPS.length}</span>
+          <button onClick={onNext} style={{padding:'8px 22px',borderRadius:8,border:'none',background:colors.blue,color:'white',cursor:'pointer',fontWeight:600,fontSize:14}}>{s.btn[lang]}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* --- App --- */
 export default function App() {
   const [lang, setLang] = useState('en')
@@ -499,7 +676,65 @@ export default function App() {
   const [latencyPop, setLatencyPop] = useState(false)
   const [, setTimeTick] = useState(0)
   const [metricHistory, setMetricHistory] = useState({})
+  const [tourStep, setTourStep] = useState(0)
+  const [tourActive, setTourActive] = useState(true)
   const t = T[lang]
+
+  // Tour: advance to next step, executing actions
+  const tourNext = useCallback(() => {
+    const currentStep = TOUR_STEPS[tourStep]
+    const nextStep = tourStep + 1
+
+    if (nextStep >= TOUR_STEPS.length) {
+      setTourActive(false)
+      return
+    }
+
+    const nextDef = TOUR_STEPS[nextStep]
+
+    // Execute action for the NEXT step if it needs setup
+    if (nextDef.action === 'switchEvents') {
+      setTab('events')
+    } else if (nextDef.action === 'switchMlops') {
+      setTab('mlops')
+    }
+
+    // Execute action of CURRENT step's button
+    if (currentStep.action === 'selectFinancial') {
+      setTab('pipeline')
+      setSelectedDoc('financial')
+      setResult(null)
+    } else if (currentStep.action === 'runFull') {
+      setMode('full')
+      // Trigger analysis then wait for results
+      const doc = SAMPLES.find(d => d.id === (selectedDoc || 'financial'))
+      if (doc) {
+        // Small delay then advance once results appear
+        setTimeout(() => {
+          // Auto-click run by calling runAnalysis indirectly
+          document.querySelector('[data-tour="run-analysis"] .btn-primary')?.click()
+        }, 300)
+        // Wait for analysis to complete before advancing to results step
+        setTimeout(() => {
+          setTourStep(nextStep)
+        }, 3500)
+        return
+      }
+    }
+
+    setTourStep(nextStep)
+  }, [tourStep, selectedDoc])
+
+  // Tour: ensure correct tab is shown for highlight steps
+  useEffect(() => {
+    if (!tourActive) return
+    const s = TOUR_STEPS[tourStep]
+    if (!s) return
+    if (s.target === 'architecture') setTab('arch')
+    if (s.target === 'doc-select' || s.target === 'run-analysis' || s.target === 'results') setTab('pipeline')
+    if (s.target === 'events-tab') setTab('events')
+    if (s.target === 'mlops-tab') setTab('mlops')
+  }, [tourStep, tourActive])
 
   // Feature 6: Live Feed Counters
   useEffect(() => {
@@ -531,7 +766,7 @@ export default function App() {
 
   // Feature 9: Refresh relative timestamps
   useEffect(() => {
-    const interval = setInterval(() => setTimeTick(t => t + 1), 5000)
+    const interval = setInterval(() => setTimeTick(tick => tick + 1), 5000)
     return () => clearInterval(interval)
   }, [])
 
@@ -592,7 +827,7 @@ export default function App() {
         const ac = prev.analyses_completed || { count:0 }
         return {
           ...prev,
-          analysis_quality: { count: aq.count+1, total: aq.total + score, mean: ((aq.total+score)/(aq.count+1)).toFixed(1), min: Math.min(aq.min||10, score), max: Math.max(aq.max||0, score) },
+          analysis_quality: { count: aq.count+1, total: aq.total + score, mean: ((aq.total+score)/(aq.count+1)).toFixed(1), min: Math.min(aq.min ?? 10, score), max: Math.max(aq.max ?? 0, score) },
           analyses_completed: { count: ac.count+1 },
         }
       })
@@ -602,7 +837,7 @@ export default function App() {
         return {
           ...prev,
           analysis_quality: [...aqHist, score].slice(-10),
-          analyses_completed: [...acHist, (prev.analyses_completed?.length || 0) + 1].slice(-10),
+          analyses_completed: [...acHist, (acHist.length || 0) + 1].slice(-10),
         }
       })
     }
@@ -653,18 +888,18 @@ export default function App() {
         {/* Architecture Tab */}
         {tab === 'arch' && (
           <div className="tab-panel" key="arch">
-            <div className="card">
-              <h3>Microservices Architecture</h3>
+            <div className="card" data-tour="architecture">
+              <h3>{t.microservicesArch}</h3>
               <p style={{color:colors.textMuted,marginBottom:16,fontSize:14}}>{t.archDesc}</p>
               <ArchitectureSVG t={t} lang={lang} />
             </div>
 
             <div className="card">
-              <h3>Tech Stack</h3>
+              <h3>{t.techStack}</h3>
               <div className="grid3">
-                <div><strong style={{color:colors.blue}}>Backend</strong><p style={{fontSize:13,color:colors.textMuted,marginTop:4}}>FastAPI, LangChain, Pydantic, AWS Bedrock, Python 3.11+</p></div>
-                <div><strong style={{color:colors.green}}>Frontend</strong><p style={{fontSize:13,color:colors.textMuted,marginTop:4}}>React 18, Vite, Vercel</p></div>
-                <div><strong style={{color:colors.amber}}>MLOps</strong><p style={{fontSize:13,color:colors.textMuted,marginTop:4}}>Versioned Prompts, Quality Metrics, Structured Logging</p></div>
+                <div><strong style={{color:colors.blue}}>{t.backend}</strong><p style={{fontSize:13,color:colors.textMuted,marginTop:4}}>FastAPI, LangChain, Pydantic, AWS Bedrock, Python 3.11+</p></div>
+                <div><strong style={{color:colors.green}}>{t.frontend}</strong><p style={{fontSize:13,color:colors.textMuted,marginTop:4}}>React 18, Vite, Vercel</p></div>
+                <div><strong style={{color:colors.amber}}>{t.mlopsLabel}</strong><p style={{fontSize:13,color:colors.textMuted,marginTop:4}}>Versioned Prompts, Quality Metrics, Structured Logging</p></div>
               </div>
             </div>
           </div>
@@ -673,7 +908,7 @@ export default function App() {
         {/* Pipeline Tab */}
         {tab === 'pipeline' && (
           <div className="tab-panel" key="pipeline">
-            <div className="card">
+            <div className="card" data-tour="doc-select">
               <h3>{t.selectDoc}</h3>
               <div className="grid3">
                 {SAMPLES.map(doc => (
@@ -687,7 +922,7 @@ export default function App() {
             </div>
 
             {selectedDoc && (
-              <div className="card">
+              <div className="card" data-tour="run-analysis">
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}>
                   <div className="mode-toggle">
                     <button className={`mode-btn ${mode === 'quick' ? 'active' : ''}`} onClick={() => setMode('quick')}>{t.quick}</button>
@@ -700,7 +935,7 @@ export default function App() {
 
                 {/* Chain visualization with animations */}
                 {(loading || result) && (
-                  <div style={{marginTop:16}}>
+                  <div style={{marginTop:16,position:'relative'}}>
                     {/* SVG connecting lines */}
                     {mode === 'full' && (
                       <svg width="4" height={t.chainSteps.length * 52} style={{position:'absolute',marginLeft:25,marginTop:6,pointerEvents:'none',zIndex:0}}>
@@ -731,13 +966,13 @@ export default function App() {
                           <span style={{fontSize:14,zIndex:1}}>{step}</span>
                           {isActive && (
                             <span style={{color:colors.amber,fontSize:12,marginLeft:'auto',display:'flex',alignItems:'center',zIndex:1}}>
-                              Processing
+                              {t.processing}
                               <span className="typing-dots" style={{marginLeft:4}}>
                                 <span></span><span></span><span></span>
                               </span>
                             </span>
                           )}
-                          {isDone && <span style={{color:colors.green,fontSize:12,marginLeft:'auto',zIndex:1}}>Done</span>}
+                          {isDone && <span style={{color:colors.green,fontSize:12,marginLeft:'auto',zIndex:1}}>{t.done}</span>}
                         </div>
                       )
                     })}
@@ -755,7 +990,7 @@ export default function App() {
 
             {/* Results */}
             {result && (
-              <div className="card" style={{animation:'chainFadeIn .4s ease'}}>
+              <div className="card" data-tour="results" style={{animation:'chainFadeIn .4s ease'}}>
                 <h3>{t.results}</h3>
                 {result.mode === 'quick' ? (
                   <div className="result-section">
@@ -835,8 +1070,8 @@ export default function App() {
 
         {/* Events Tab */}
         {tab === 'events' && (
-          <div className="card tab-panel" key="events">
-            <h3>Event Log ({events.length} events)</h3>
+          <div className="card tab-panel" data-tour="events-tab" key="events">
+            <h3>{t.eventLogTitle} ({events.length} {t.events})</h3>
             <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',borderBottom:'1px solid #1E293B'}}>
               <span style={{width:6,height:6,borderRadius:'50%',background:'#10B981',animation:'liveDot 2s infinite'}}/>
               <span style={{color:'#6B7280',fontSize:12}}>{t.listeningForEvents}</span>
@@ -863,9 +1098,9 @@ export default function App() {
 
         {/* MLOps Tab */}
         {tab === 'mlops' && (
-          <div className="tab-panel" key="mlops">
+          <div className="tab-panel" data-tour="mlops-tab" key="mlops">
             <div className="card">
-              <h3>Prompt Registry</h3>
+              <h3>{t.promptRegistry}</h3>
               <table>
                 <thead><tr><th>{t.promptName}</th><th>{t.version}</th><th>{t.status}</th></tr></thead>
                 <tbody>
@@ -877,7 +1112,7 @@ export default function App() {
             </div>
 
             <div className="card">
-              <h3>Quality Metrics</h3>
+              <h3>{t.qualityMetrics}</h3>
               {Object.keys(metrics).length === 0 ? (
                 <div className="empty-state">{t.noMetrics}</div>
               ) : (
@@ -913,8 +1148,18 @@ export default function App() {
       {voiceOpen && (
         <div style={{position:'fixed',bottom:90,right:24,width:350,height:400,borderRadius:16,overflow:'hidden',boxShadow:'0 8px 40px rgba(0,0,0,.5)',zIndex:100}}>
           <elevenlabs-convai agent-id="agent_5601kmfx9vnzeb691cj64x2khmm0" style={{width:'100%',height:'100%'}}></elevenlabs-convai>
-          <script src="https://elevenlabs.io/convai-widget/index.js" async></script>
         </div>
+      )}
+
+      {/* Onboarding Tour */}
+      {tourActive && (
+        <TourOverlay
+          step={tourStep}
+          lang={lang}
+          setLang={setLang}
+          onNext={tourNext}
+          onClose={() => setTourActive(false)}
+        />
       )}
     </>
   )
