@@ -527,8 +527,8 @@ const TOUR_STEPS = [
       en: 'Choose from 3 sample documents: a Service Agreement, a Q4 Financial Report, or a GDPR Compliance Assessment. Each triggers different analysis patterns.',
       es: 'Elige entre 3 documentos de ejemplo: un Acuerdo de Servicios, un Reporte Financiero Q4, o una Evaluaci\u00f3n de Cumplimiento GDPR. Cada uno activa diferentes patrones de an\u00e1lisis.'
     },
-    btn: { en: 'Select Document \u2192', es: 'Seleccionar Documento \u2192' },
-    action: 'selectFinancial',
+    btn: { en: 'Select & Analyze \u2192', es: 'Seleccionar y Analizar \u2192' },
+    action: 'selectAndRun',
   },
   {
     type: 'highlight',
@@ -537,8 +537,8 @@ const TOUR_STEPS = [
       en: 'Quick mode runs 2 chain steps for a fast summary. Full Pipeline mode runs all 5 steps including quality review and report generation.',
       es: 'El modo R\u00e1pido ejecuta 2 pasos para un resumen r\u00e1pido. El modo Pipeline Completo ejecuta los 5 pasos incluyendo revisi\u00f3n de calidad y generaci\u00f3n de reporte.'
     },
-    btn: { en: 'Run Full Analysis \u2192', es: 'Ejecutar An\u00e1lisis \u2192' },
-    action: 'runFull',
+    btn: { en: 'Running...', es: 'Ejecutando...' },
+    action: 'waiting',
   },
   {
     type: 'highlight',
@@ -712,18 +712,16 @@ export default function App() {
         setTab('arch')
         setTourStep(1)
         break
-      case 1: // Architecture → Pipeline tab + auto-select doc
+      case 1: // Architecture → Pipeline tab
         setTab('pipeline')
         setTimeout(() => {
-          setSelectedDoc('financial')
-          setResult(null)
           setTourStep(2)
         }, 300)
         break
-      case 2: // Doc selected → auto-run full analysis
+      case 2: // Select doc + auto-run full analysis in one step
+        setSelectedDoc('financial')
+        setResult(null)
         setMode('full')
-        // We need to run analysis directly (not via DOM click)
-        // Set loading state and trigger analysis inline
         setTourStep(3)
         // Small delay to let the UI update to step 3, then run analysis
         setTimeout(() => {
