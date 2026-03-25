@@ -44,7 +44,7 @@ logger = StructuredLogger()
 # Register default prompts
 prompt_registry.register(
     "extract_analysis",
-    "Analyze this document and provide a structured analysis:\n\n{document}",
+    "Analyze this document and provide a structured analysis:\n\n{document}\n\nRespond in JSON with: summary, key_topics (list of 5), sentiment (positive/negative/neutral), risk_level (low/medium/high), action_items (list of 3)",
     "1.0.0",
 )
 prompt_registry.register(
@@ -67,14 +67,8 @@ prompt_registry.register(
 # Wire prompt registry to analysis service
 set_prompt_registry(prompt_registry)
 
-# Seed demo metrics
+# Note: metrics are now fed from real ObservabilityHandler data (FIX 5)
 import random
-for i in range(10):
-    analysis_metrics.record("analysis_quality", random.uniform(7.0, 9.5))
-    analysis_metrics.record("analyses_completed", 1.0)
-    analysis_metrics.record("processing_time_ms", random.uniform(800, 3500))
-    analysis_metrics.record("input_tokens", random.uniform(500, 2000))
-    analysis_metrics.record("output_tokens", random.uniform(200, 800))
 
 # Seed demo experiment
 exp_mgr = get_experiment_manager()

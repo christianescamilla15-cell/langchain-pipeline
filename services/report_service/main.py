@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 
 from .generator import ReportGenerator
 from .events import subscribe_to_analysis
+from services.event_bus import EventBus
 
 app = FastAPI(title="Report Service", version="1.0.0")
 generator = ReportGenerator()
@@ -34,6 +35,10 @@ async def _handle_analysis_completed(event):
 
     report = generator.generate(doc_id, analysis)
     _reports[report["report_id"]] = report
+
+    # Publish report.generated event
+    bus = EventBus()
+    await bus.publish("report.generated", {"report_id": report["report_id"], "document_id": doc_id})
 
 
 # Subscribe to events

@@ -4,16 +4,18 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import json
 import asyncio
+import time
 
 from .chains import create_analysis_chain, create_simple_chain, create_agent_chain, create_composed_chain, create_chains_from_registry
 from .tools import extract_keywords, detect_risk_terms, analyze_sentiment_basic, count_sections, ANALYSIS_TOOLS
-from .bedrock_client import get_llm
+from .bedrock_client import get_llm, get_model_router
 from .events import publish_analysis_completed, subscribe_to_documents
 from .rag import get_vector_store
 from .callbacks import ObservabilityHandler, GlobalObservability
 from .guardrails import InputGuardrails, OutputGuardrails
 from services.mlops.metrics import MetricsTracker
 from services.mlops import StructuredLogger
+from services.mlops.experiments import get_experiment_manager
 
 app = FastAPI(title="Analysis Service", version="1.0.0")
 metrics = MetricsTracker()
@@ -57,10 +59,17 @@ async def analyze_document(body: AnalyzeRequest):
         for issue in input_check.issues:
             logger.warn("analysis_service", f"Input guardrail: {issue}")
 
+    # Block if content is invalid (too long) — PII/injection are warnings only
+    if not input_check.valid:
+        raise HTTPException(status_code=400, detail=f"Input validation failed: {'; '.join(input_check.issues)}")
+
+    # Use sanitized content instead of raw content
+    content = input_check.sanitized_content
+
     llm = get_llm()
 
     # Run tools in parallel
-    parallel_results = await run_tools_parallel(body.content)
+    parallel_results = await run_tools_parallel(content)
     tool_results = {
         "keywords": parallel_results["keywords"],
         "risk_terms": parallel_results["risks"],
@@ -71,8 +80,21 @@ async def analyze_document(body: AnalyzeRequest):
     if body.mode == "quick":
         handler = ObservabilityHandler(chain_step="quick_summary")
         chain = create_simple_chain(llm)
-        summary = chain.invoke({"document": body.content}, config={"callbacks": [handler]})
+        model_router = get_model_router()
+        _, model_name = model_router.get_llm()
+        start = time.time()
+        try:
+            summary = chain.invoke({"document": content}, config={"callbacks": [handler]})
+            model_router.record_call(model_name, int((time.time() - start) * 1000), True)
+        except Exception as e:
+            model_router.record_call(model_name, int((time.time() - start) * 1000), False)
+            raise
         obs.add_records(handler.records)
+        # Feed callback data into MetricsTracker
+        for record in handler.records:
+            metrics.record("processing_time_ms", record["latency_ms"])
+            metrics.record("input_tokens", record["input_tokens"])
+            metrics.record("output_tokens", record["output_tokens"])
         result = {
             "document_id": body.document_id,
             "summary": summary,
@@ -81,13 +103,31 @@ async def analyze_document(body: AnalyzeRequest):
         }
     else:
         try:
+            # FIX 1: Retrieve RAG context for full mode
+            store = get_vector_store()
+            rag_context = store.get_context_for_analysis(content[:500], top_k=3)
+            chain_input = {"document": content + "\n\n--- Similar Documents Context ---\n" + rag_context}
+
+            # FIX 2: Check for A/B test variant
+            exp_mgr = get_experiment_manager()
+            variant = exp_mgr.get_variant("extract_v2_test", body.document_id)
+
             # Try agent first, fallback to manual chains
             agent_executor = create_agent_chain(llm, ANALYSIS_TOOLS)
             agent_used = False
 
+            model_router = get_model_router()
+            _, model_name = model_router.get_llm()
+
             if agent_executor:
                 try:
-                    agent_result = agent_executor.invoke({"document": body.content})
+                    start = time.time()
+                    try:
+                        agent_result = agent_executor.invoke(chain_input)
+                        model_router.record_call(model_name, int((time.time() - start) * 1000), True)
+                    except Exception as e:
+                        model_router.record_call(model_name, int((time.time() - start) * 1000), False)
+                        raise
                     # Parse agent output
                     agent_output = agent_result.get("output", "")
                     try:
@@ -106,17 +146,30 @@ async def analyze_document(body: AnalyzeRequest):
                     chains = create_analysis_chain(llm)
                 extract_chain, quality_chain, report_chain = chains
 
-                # Step 1: Extract & analyze with observability
+                # Step 1: Extract & analyze with observability and ModelRouter tracking
                 extract_handler = ObservabilityHandler(chain_step="extraction")
-                analysis = extract_chain.invoke({"document": body.content}, config={"callbacks": [extract_handler]})
+                start = time.time()
+                try:
+                    analysis = extract_chain.invoke(chain_input, config={"callbacks": [extract_handler]})
+                    model_router.record_call(model_name, int((time.time() - start) * 1000), True)
+                except Exception as e:
+                    model_router.record_call(model_name, int((time.time() - start) * 1000), False)
+                    raise
                 obs.add_records(extract_handler.records)
+                # Feed callback data into MetricsTracker
+                for record in extract_handler.records:
+                    metrics.record("processing_time_ms", record["latency_ms"])
+                    metrics.record("input_tokens", record["input_tokens"])
+                    metrics.record("output_tokens", record["output_tokens"])
 
             # Output guardrails on analysis
+            guardrail_warnings = []
             if isinstance(analysis, dict):
-                output_check = OutputGuardrails.validate(analysis, body.content)
+                output_check = OutputGuardrails.validate(analysis, content)
                 if not output_check.valid:
                     for issue in output_check.issues:
                         logger.warn("analysis_service", f"Output guardrail: {issue}")
+                    guardrail_warnings.extend(output_check.issues)
 
             # Step 2: Quality review (always run)
             if _prompt_registry:
@@ -127,14 +180,38 @@ async def analyze_document(body: AnalyzeRequest):
             analysis_str = json.dumps(analysis) if isinstance(analysis, dict) else analysis
 
             quality_handler = ObservabilityHandler(chain_step="quality_review")
-            quality = quality_chain.invoke({"analysis": analysis_str}, config={"callbacks": [quality_handler]})
+            start = time.time()
+            try:
+                quality = quality_chain.invoke({"analysis": analysis_str}, config={"callbacks": [quality_handler]})
+                model_router.record_call(model_name, int((time.time() - start) * 1000), True)
+            except Exception as e:
+                model_router.record_call(model_name, int((time.time() - start) * 1000), False)
+                raise
             obs.add_records(quality_handler.records)
+            for record in quality_handler.records:
+                metrics.record("processing_time_ms", record["latency_ms"])
+                metrics.record("input_tokens", record["input_tokens"])
+                metrics.record("output_tokens", record["output_tokens"])
 
             # Step 3: Final report
             quality_str = json.dumps(quality)
             report_handler = ObservabilityHandler(chain_step="report")
-            report = report_chain.invoke({"analysis": analysis_str, "review": quality_str}, config={"callbacks": [report_handler]})
+            start = time.time()
+            try:
+                report = report_chain.invoke({"analysis": analysis_str, "review": quality_str}, config={"callbacks": [report_handler]})
+                model_router.record_call(model_name, int((time.time() - start) * 1000), True)
+            except Exception as e:
+                model_router.record_call(model_name, int((time.time() - start) * 1000), False)
+                raise
             obs.add_records(report_handler.records)
+            for record in report_handler.records:
+                metrics.record("processing_time_ms", record["latency_ms"])
+                metrics.record("input_tokens", record["input_tokens"])
+                metrics.record("output_tokens", record["output_tokens"])
+
+            # FIX 2: Record quality score to A/B experiment
+            if variant and isinstance(quality, dict) and "score" in quality:
+                exp_mgr.record_result("extract_v2_test", variant, float(quality["score"]))
 
         except Exception as e:
             logger.error("analysis_service", f"Chain failed: {str(e)}")
@@ -169,13 +246,18 @@ async def analyze_document(body: AnalyzeRequest):
             "agent_used": agent_used,
         }
 
-    # Add guardrail warnings to result
+        # Add output guardrail warnings to result
+        if guardrail_warnings:
+            result["guardrail_warnings"] = guardrail_warnings
+
+    # Add input guardrail warnings to result
     if input_check.issues:
-        result["guardrail_warnings"] = input_check.issues
+        existing = result.get("guardrail_warnings", [])
+        result["guardrail_warnings"] = existing + input_check.issues
 
     # Add document to RAG vector store
     store = get_vector_store()
-    chunks_added = store.add_document(body.document_id, body.content)
+    chunks_added = store.add_document(body.document_id, content)
     result["rag_chunks_added"] = chunks_added
 
     _analyses[body.document_id] = result

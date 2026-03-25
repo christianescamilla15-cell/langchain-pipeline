@@ -1,6 +1,7 @@
 """API Key authentication middleware."""
-from fastapi import Request, HTTPException
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 import os
 
 
@@ -19,6 +20,6 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         expected_key = os.environ.get("PIPELINE_API_KEY", "demo")
 
         if api_key != expected_key and expected_key != "demo":
-            raise HTTPException(status_code=401, detail="Invalid API key")
+            return JSONResponse(status_code=401, content={"detail": "Invalid API key"})
 
         return await call_next(request)
