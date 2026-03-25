@@ -71,6 +71,8 @@ class FAISSVectorStore:
 
     def add_document(self, doc_id: str, text: str) -> int:
         """Chunk, embed, and store a document. Returns chunk count."""
+        # Remove existing chunks for this doc_id (dedup)
+        self._chunks = [c for c in self._chunks if c.doc_id != doc_id]
         raw_chunks = self._splitter.split(text)
         count = 0
         for i, chunk_text in enumerate(raw_chunks):

@@ -3,9 +3,10 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage, AIMessage
 from langchain_core.outputs import ChatResult, ChatGeneration
 from typing import Any, Optional
-import os
 import json
 import re
+
+from config import get_settings
 
 
 class MockBedrockLLM(BaseChatModel):
@@ -121,6 +122,9 @@ class MockBedrockLLM(BaseChatModel):
             }
         )
 
+    async def _agenerate(self, messages, stop=None, **kwargs):
+        return self._generate(messages, stop, **kwargs)
+
     @property
     def _llm_type(self) -> str:
         return "mock-bedrock"
@@ -136,8 +140,9 @@ class ModelRouter:
 
     def _setup_models(self):
         """Set up the model fallback chain."""
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        aws_region = os.environ.get("AWS_DEFAULT_REGION", "")
+        settings = get_settings()
+        api_key = settings.anthropic_api_key
+        aws_region = settings.aws_default_region
 
         # Try Bedrock Sonnet (primary)
         if aws_region:
@@ -200,6 +205,7 @@ class ModelRouter:
             self._stats[m["name"]] = {
                 "calls": 0,
                 "errors": 0,
+                "consecutive_errors": 0,
                 "total_latency_ms": 0,
                 "status": "healthy",
             }
@@ -216,10 +222,14 @@ class ModelRouter:
         if model_name in self._stats:
             self._stats[model_name]["calls"] += 1
             self._stats[model_name]["total_latency_ms"] += latency_ms
-            if not success:
+            if success:
+                self._stats[model_name]["consecutive_errors"] = 0
+                if self._stats[model_name]["status"] == "degraded":
+                    self._stats[model_name]["status"] = "healthy"
+            else:
                 self._stats[model_name]["errors"] += 1
-                # Mark as degraded after 3 consecutive errors
-                if self._stats[model_name]["errors"] >= 3:
+                self._stats[model_name]["consecutive_errors"] = self._stats[model_name].get("consecutive_errors", 0) + 1
+                if self._stats[model_name]["consecutive_errors"] >= 3:
                     self._stats[model_name]["status"] = "degraded"
 
     def get_model_status(self) -> list[dict]:

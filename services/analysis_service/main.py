@@ -26,7 +26,7 @@ _prompt_registry = None
 
 async def run_tools_parallel(content: str) -> dict:
     """Run all analysis tools in parallel."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     keywords_task = loop.run_in_executor(None, lambda: extract_keywords.invoke(content))
     risks_task = loop.run_in_executor(None, lambda: detect_risk_terms.invoke(content))
     sentiment_task = loop.run_in_executor(None, lambda: analyze_sentiment_basic.invoke(content))
@@ -84,7 +84,7 @@ async def analyze_document(body: AnalyzeRequest):
         _, model_name = model_router.get_llm()
         start = time.time()
         try:
-            summary = chain.invoke({"document": content}, config={"callbacks": [handler]})
+            summary = await chain.ainvoke({"document": content}, config={"callbacks": [handler]})
             model_router.record_call(model_name, int((time.time() - start) * 1000), True)
         except Exception as e:
             model_router.record_call(model_name, int((time.time() - start) * 1000), False)
@@ -111,6 +111,13 @@ async def analyze_document(body: AnalyzeRequest):
             # FIX 2: Check for A/B test variant
             exp_mgr = get_experiment_manager()
             variant = exp_mgr.get_variant("extract_v2_test", body.document_id)
+
+            # Create chains once (used by fallback path and quality/report steps)
+            if _prompt_registry:
+                chains = create_chains_from_registry(llm, _prompt_registry)
+            else:
+                chains = create_analysis_chain(llm)
+            extract_chain, quality_chain, report_chain = chains
 
             # Try agent first, fallback to manual chains
             agent_executor = create_agent_chain(llm, ANALYSIS_TOOLS)
@@ -139,18 +146,12 @@ async def analyze_document(body: AnalyzeRequest):
                     agent_used = False
 
             if not agent_used:
-                # Fallback to manual chains — try registry prompts first
-                if _prompt_registry:
-                    chains = create_chains_from_registry(llm, _prompt_registry)
-                else:
-                    chains = create_analysis_chain(llm)
-                extract_chain, quality_chain, report_chain = chains
 
                 # Step 1: Extract & analyze with observability and ModelRouter tracking
                 extract_handler = ObservabilityHandler(chain_step="extraction")
                 start = time.time()
                 try:
-                    analysis = extract_chain.invoke(chain_input, config={"callbacks": [extract_handler]})
+                    analysis = await extract_chain.ainvoke(chain_input, config={"callbacks": [extract_handler]})
                     model_router.record_call(model_name, int((time.time() - start) * 1000), True)
                 except Exception as e:
                     model_router.record_call(model_name, int((time.time() - start) * 1000), False)
@@ -171,18 +172,13 @@ async def analyze_document(body: AnalyzeRequest):
                         logger.warn("analysis_service", f"Output guardrail: {issue}")
                     guardrail_warnings.extend(output_check.issues)
 
-            # Step 2: Quality review (always run)
-            if _prompt_registry:
-                chains = create_chains_from_registry(llm, _prompt_registry)
-            else:
-                chains = create_analysis_chain(llm)
-            _, quality_chain, report_chain = chains
+            # Step 2: Quality review (always run) — reuse chains from above
             analysis_str = json.dumps(analysis) if isinstance(analysis, dict) else analysis
 
             quality_handler = ObservabilityHandler(chain_step="quality_review")
             start = time.time()
             try:
-                quality = quality_chain.invoke({"analysis": analysis_str}, config={"callbacks": [quality_handler]})
+                quality = await quality_chain.ainvoke({"analysis": analysis_str}, config={"callbacks": [quality_handler]})
                 model_router.record_call(model_name, int((time.time() - start) * 1000), True)
             except Exception as e:
                 model_router.record_call(model_name, int((time.time() - start) * 1000), False)
@@ -198,7 +194,7 @@ async def analyze_document(body: AnalyzeRequest):
             report_handler = ObservabilityHandler(chain_step="report")
             start = time.time()
             try:
-                report = report_chain.invoke({"analysis": analysis_str, "review": quality_str}, config={"callbacks": [report_handler]})
+                report = await report_chain.ainvoke({"analysis": analysis_str, "review": quality_str}, config={"callbacks": [report_handler]})
                 model_router.record_call(model_name, int((time.time() - start) * 1000), True)
             except Exception as e:
                 model_router.record_call(model_name, int((time.time() - start) * 1000), False)
@@ -286,18 +282,18 @@ async def analyze_stream(body: AnalyzeRequest):
         extract_chain, quality_chain, report_chain = create_analysis_chain(llm)
 
         try:
-            analysis = extract_chain.invoke({"document": content})
+            analysis = await extract_chain.ainvoke({"document": content})
             yield f"data: {json.dumps({'step': 'extraction_done', 'summary': str(analysis.get('summary', ''))[:200]})}\n\n"
             await asyncio.sleep(0.2)
 
             yield f"data: {json.dumps({'step': 'quality', 'message': 'Quality review...'})}\n\n"
-            quality = quality_chain.invoke({"analysis": json.dumps(analysis)})
+            quality = await quality_chain.ainvoke({"analysis": json.dumps(analysis)})
             yield f"data: {json.dumps({'step': 'quality_done', 'score': quality.get('score', 0)})}\n\n"
             await asyncio.sleep(0.2)
 
             yield f"data: {json.dumps({'step': 'report', 'message': 'Generating report...'})}\n\n"
             # Stream report word by word
-            report_text = report_chain.invoke({"analysis": json.dumps(analysis), "review": json.dumps(quality)})
+            report_text = await report_chain.ainvoke({"analysis": json.dumps(analysis), "review": json.dumps(quality)})
             words = report_text.split()
             for i in range(0, len(words), 5):
                 chunk = " ".join(words[i:i+5])
@@ -329,9 +325,10 @@ async def _handle_document_created(event):
     content = payload.get("content", "")
     doc_id = payload.get("document_id", "unknown")
 
-    # Run quick tools analysis
-    keywords = extract_keywords.invoke(content)
-    sentiment = analyze_sentiment_basic.invoke(content)
+    # Run quick tools analysis via executor to avoid blocking event loop
+    loop = asyncio.get_running_loop()
+    keywords = await loop.run_in_executor(None, lambda: extract_keywords.invoke(content))
+    sentiment = await loop.run_in_executor(None, lambda: analyze_sentiment_basic.invoke(content))
 
     # Add to RAG store
     store = get_vector_store()

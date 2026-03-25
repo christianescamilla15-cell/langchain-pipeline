@@ -86,7 +86,7 @@ class OutputGuardrails:
         # Check required fields
         missing = cls.REQUIRED_FIELDS - set(output.keys())
         if missing:
-            issues.append(f"Missing fields: {missing}")
+            issues.append(f"Missing fields: {sorted(list(missing))}")
 
         # Validate sentiment
         sentiment = output.get("sentiment", "")

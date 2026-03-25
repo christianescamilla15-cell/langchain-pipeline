@@ -4,6 +4,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 import os
 
+from config import get_settings
+
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
     EXCLUDED_PATHS = {"/api/health", "/docs", "/openapi.json", "/"}
@@ -17,7 +19,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         # Check for API key
         api_key = request.headers.get("X-API-Key", "")
-        expected_key = os.environ.get("PIPELINE_API_KEY", "demo")
+        # Read at request time to support dynamic env var changes (e.g., tests)
+        expected_key = os.environ.get("PIPELINE_API_KEY", get_settings().pipeline_api_key)
 
         if api_key != expected_key and expected_key != "demo":
             return JSONResponse(status_code=401, content={"detail": "Invalid API key"})

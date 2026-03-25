@@ -4,7 +4,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+import random
+import uuid
 
+from config import get_settings
 from services.document_service.main import app as doc_app, store as doc_store
 from services.analysis_service.main import app as analysis_app, metrics as analysis_metrics, set_prompt_registry
 from services.report_service.main import app as report_app
@@ -15,6 +18,9 @@ from services.event_bus import EventBus
 from services.mlops import PromptRegistry, MetricsTracker, StructuredLogger
 from services.mlops.experiments import get_experiment_manager
 from gateway.auth import APIKeyMiddleware
+from services.exceptions import PipelineError
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 app = FastAPI(
     title="LangChain Pipeline - API Gateway",
@@ -26,11 +32,34 @@ app.add_middleware(APIKeyMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "https://langchain-pipeline.vercel.app"],
+    allow_origins=get_settings().cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*", "X-API-Key"],
 )
+
+
+# IMP-5: Request ID / Correlation ID middleware
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:8])
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+app.add_middleware(RequestIDMiddleware)
+
+
+# IMP-3: Global exception handler for structured errors
+@app.exception_handler(PipelineError)
+async def pipeline_error_handler(request, exc):
+    status_map = {"DOCUMENT_NOT_FOUND": 404, "GUARDRAIL_VIOLATION": 422, "LLM_CHAIN_ERROR": 502}
+    return JSONResponse(
+        status_code=status_map.get(exc.code, 500),
+        content={"error": exc.message, "code": exc.code}
+    )
+
 
 # Mount microservices
 app.mount("/api/documents-service", doc_app)
@@ -68,7 +97,6 @@ prompt_registry.register(
 set_prompt_registry(prompt_registry)
 
 # Note: metrics are now fed from real ObservabilityHandler data (FIX 5)
-import random
 
 # Seed demo experiment
 exp_mgr = get_experiment_manager()
@@ -96,7 +124,7 @@ async def health() -> dict[str, Any]:
             "rag_store": "running",
         },
         "documents_count": doc_store.count(),
-        "events_count": len(bus.get_log(limit=9999)),
+        "events_count": bus.count(),
         "rag_chunks": store.chunk_count,
         "rag_documents": store.doc_count,
     }

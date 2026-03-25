@@ -39,6 +39,9 @@ class EventBus:
             else:
                 handler(event)
 
+    def count(self) -> int:
+        return len(self._event_log)
+
     def get_log(self, limit: int = 50) -> list[dict]:
         return [
             {
