@@ -527,7 +527,7 @@ const TOUR_STEPS = [
       en: 'Choose from 3 sample documents: a Service Agreement, a Q4 Financial Report, or a GDPR Compliance Assessment. Each triggers different analysis patterns.',
       es: 'Elige entre 3 documentos de ejemplo: un Acuerdo de Servicios, un Reporte Financiero Q4, o una Evaluaci\u00f3n de Cumplimiento GDPR. Cada uno activa diferentes patrones de an\u00e1lisis.'
     },
-    btn: { en: 'Try it \u2192', es: 'Pru\u00e9balo \u2192' },
+    btn: { en: 'Select Document \u2192', es: 'Seleccionar Documento \u2192' },
     action: 'selectFinancial',
   },
   {
@@ -537,7 +537,7 @@ const TOUR_STEPS = [
       en: 'Quick mode runs 2 chain steps for a fast summary. Full Pipeline mode runs all 5 steps including quality review and report generation.',
       es: 'El modo R\u00e1pido ejecuta 2 pasos para un resumen r\u00e1pido. El modo Pipeline Completo ejecuta los 5 pasos incluyendo revisi\u00f3n de calidad y generaci\u00f3n de reporte.'
     },
-    btn: { en: 'Run Full Analysis \u2192', es: 'Ejecutar An\u00e1lisis Completo \u2192' },
+    btn: { en: 'Run Full Analysis \u2192', es: 'Ejecutar An\u00e1lisis \u2192' },
     action: 'runFull',
   },
   {
@@ -556,7 +556,7 @@ const TOUR_STEPS = [
       en: 'The Event Log shows real-time events flowing through the Event Bus. Every document creation, analysis, and report generation emits events here.',
       es: 'El Log de Eventos muestra eventos en tiempo real fluyendo por el Event Bus. Cada creaci\u00f3n de documento, an\u00e1lisis y generaci\u00f3n de reporte emite eventos aqu\u00ed.'
     },
-    btn: { en: 'Next \u2192', es: 'Siguiente \u2192' },
+    btn: { en: 'View Events \u2192', es: 'Ver Eventos \u2192' },
     action: 'switchEvents',
   },
   {
@@ -572,7 +572,7 @@ const TOUR_STEPS = [
 ]
 
 /* --- Tour Overlay Component --- */
-function TourOverlay({ step, lang, setLang, onNext, onClose }) {
+function TourOverlay({ step, lang, setLang, onNext, onClose, isAnalysisRunning }) {
   const s = TOUR_STEPS[step]
   if (!s) return null
 
@@ -608,7 +608,12 @@ function TourOverlay({ step, lang, setLang, onNext, onClose }) {
             <button onClick={() => setLang('en')} style={{padding:'6px 16px',borderRadius:6,border:`1px solid ${lang==='en'?colors.blue:colors.border}`,background:lang==='en'?colors.blue:'transparent',color:colors.text,cursor:'pointer',fontWeight:600}}>EN</button>
             <button onClick={() => setLang('es')} style={{padding:'6px 16px',borderRadius:6,border:`1px solid ${lang==='es'?colors.blue:colors.border}`,background:lang==='es'?colors.blue:'transparent',color:colors.text,cursor:'pointer',fontWeight:600}}>ES</button>
           </div>
-          <button onClick={onNext} style={{padding:'10px 28px',borderRadius:8,border:'none',background:colors.blue,color:'white',cursor:'pointer',fontWeight:600,fontSize:15}}>{s.btn[lang]}</button>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <button onClick={onClose} style={{padding:'10px 20px',borderRadius:8,border:`1px solid ${colors.border}`,background:'transparent',color:colors.textMuted,cursor:'pointer',fontWeight:500,fontSize:14}}>
+              {lang === 'en' ? 'Skip Tour' : 'Saltar Tour'}
+            </button>
+            <button onClick={onNext} style={{padding:'10px 28px',borderRadius:8,border:'none',background:colors.blue,color:'white',cursor:'pointer',fontWeight:600,fontSize:15}}>{s.btn[lang]}</button>
+          </div>
         </div>
       </div>
     )
@@ -624,8 +629,11 @@ function TourOverlay({ step, lang, setLang, onNext, onClose }) {
 
   const rect = targetEl ? targetEl.getBoundingClientRect() : null
 
+  // During step 3 (run-analysis), analysis is auto-running — show loading state
+  const isAutoRunning = step === 3 && isAnalysisRunning
+
   return (
-    <div style={{position:'fixed',top:0,left:0,width:'100%',height:'100%',zIndex:9998}} onClick={e => { if(e.target===e.currentTarget) onClose() }}>
+    <div style={{position:'fixed',top:0,left:0,width:'100%',height:'100%',zIndex:9998}} onClick={e => { if(e.target===e.currentTarget && !isAutoRunning) onClose() }}>
       {/* Dark overlay with cutout */}
       <div style={{position:'fixed',top:0,left:0,width:'100%',height:'100%',background:'rgba(0,0,0,0.6)',zIndex:9998}} />
       {/* Highlight border around target */}
@@ -645,10 +653,27 @@ function TourOverlay({ step, lang, setLang, onNext, onClose }) {
         top: rect ? Math.min(rect.bottom + 12, window.innerHeight - 200) : '50%',
         transform: rect ? 'none' : 'translate(-50%,-50%)',
       }}>
-        <p style={{color:colors.textMuted,fontSize:14,lineHeight:1.7,marginBottom:16}}>{s.text[lang]}</p>
+        <p style={{color:colors.textMuted,fontSize:14,lineHeight:1.7,marginBottom:16}}>
+          {isAutoRunning
+            ? (lang === 'en' ? 'Running full pipeline analysis... Watch the 5 chain steps process the document in real time.' : 'Ejecutando analisis de pipeline completo... Observa los 5 pasos procesando el documento en tiempo real.')
+            : s.text[lang]
+          }
+        </p>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span style={{color:colors.textMuted,fontSize:12}}>{step + 1} / {TOUR_STEPS.length}</span>
-          <button onClick={onNext} style={{padding:'8px 22px',borderRadius:8,border:'none',background:colors.blue,color:'white',cursor:'pointer',fontWeight:600,fontSize:14}}>{s.btn[lang]}</button>
+          {isAutoRunning ? (
+            <span style={{display:'flex',alignItems:'center',gap:8,color:colors.amber,fontSize:14,fontWeight:600}}>
+              {lang === 'en' ? 'Analyzing...' : 'Analizando...'}
+              <span className="typing-dots"><span></span><span></span><span></span></span>
+            </span>
+          ) : (
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <button onClick={onClose} style={{padding:'8px 16px',borderRadius:8,border:`1px solid ${colors.border}`,background:'transparent',color:colors.textMuted,cursor:'pointer',fontWeight:500,fontSize:13}}>
+                {lang === 'en' ? 'Skip' : 'Saltar'}
+              </button>
+              <button onClick={onNext} style={{padding:'8px 22px',borderRadius:8,border:'none',background:colors.blue,color:'white',cursor:'pointer',fontWeight:600,fontSize:14}}>{s.btn[lang]}</button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -680,61 +705,128 @@ export default function App() {
   const [tourActive, setTourActive] = useState(true)
   const t = T[lang]
 
-  // Tour: advance to next step, executing actions
+  // Tour: advance to next step, auto-executing actions (fully guided like Ad Analytics)
   const tourNext = useCallback(() => {
-    const currentStep = TOUR_STEPS[tourStep]
-    const nextStep = tourStep + 1
-
-    if (nextStep >= TOUR_STEPS.length) {
-      setTourActive(false)
-      return
-    }
-
-    const nextDef = TOUR_STEPS[nextStep]
-
-    // Execute action for the NEXT step if it needs setup
-    if (nextDef.action === 'switchEvents') {
-      setTab('events')
-    } else if (nextDef.action === 'switchMlops') {
-      setTab('mlops')
-    }
-
-    // Execute action of CURRENT step's button
-    if (currentStep.action === 'selectFinancial') {
-      setTab('pipeline')
-      setSelectedDoc('financial')
-      setResult(null)
-    } else if (currentStep.action === 'runFull') {
-      setMode('full')
-      // Trigger analysis then wait for results
-      const doc = SAMPLES.find(d => d.id === (selectedDoc || 'financial'))
-      if (doc) {
-        // Small delay then advance once results appear
+    switch (tourStep) {
+      case 0: // Welcome → Architecture
+        setTab('arch')
+        setTourStep(1)
+        break
+      case 1: // Architecture → Pipeline tab + auto-select doc
+        setTab('pipeline')
         setTimeout(() => {
-          // Auto-click run by calling runAnalysis indirectly
-          document.querySelector('[data-tour="run-analysis"] .btn-primary')?.click()
+          setSelectedDoc('financial')
+          setResult(null)
+          setTourStep(2)
         }, 300)
-        // Wait for analysis to complete before advancing to results step
+        break
+      case 2: // Doc selected → auto-run full analysis
+        setMode('full')
+        // We need to run analysis directly (not via DOM click)
+        // Set loading state and trigger analysis inline
+        setTourStep(3)
+        // Small delay to let the UI update to step 3, then run analysis
         setTimeout(() => {
-          setTourStep(nextStep)
-        }, 3500)
-        return
-      }
+          const doc = SAMPLES.find(d => d.id === 'financial')
+          if (doc) {
+            setLoading(true)
+            setResult(null)
+            setChainStep(0)
+            setStepProgress(0)
+            // Simulate chain steps
+            const runChain = async () => {
+              const steps = [0,1,2,3,4]
+              for (let i = 0; i < steps.length; i++) {
+                setChainStep(steps[i])
+                setStepProgress(0)
+                const duration = 400 + Math.random()*300
+                const interval = 50
+                const ticks = Math.ceil(duration / interval)
+                for (let tick = 0; tick < ticks; tick++) {
+                  await new Promise(r => setTimeout(r, interval))
+                  setStepProgress(Math.min(100, ((tick + 1) / ticks) * 100))
+                }
+              }
+              const res = demoAnalyze(doc.content, 'full')
+              setResult(res)
+              setChainStep(-1)
+              setStepProgress(0)
+              setLoading(false)
+              // Add events
+              const baseTime = Date.now()
+              const eventDefs = [
+                { topic:'document.created', payload:{document_id:doc.id, title:doc.title} },
+                { topic:'analysis.completed', payload:{document_id:doc.id, mode:'full'} },
+                { topic:'report.generated', payload:{document_id:doc.id} },
+              ]
+              eventDefs.forEach((evt, idx) => {
+                setTimeout(() => {
+                  setEvents(prev => [{
+                    ...evt,
+                    timestamp: new Date(baseTime + idx * 1000).toISOString(),
+                    id: `evt-${baseTime + idx}`
+                  }, ...prev].slice(0, 50))
+                }, idx * 1000)
+              })
+              // Add metrics
+              if (res.quality_review) {
+                const score = res.quality_review.score
+                setMetrics(prev => {
+                  const aq = prev.analysis_quality || { count:0, total:0 }
+                  const ac = prev.analyses_completed || { count:0 }
+                  return {
+                    ...prev,
+                    analysis_quality: { count: aq.count+1, total: aq.total + score, mean: ((aq.total+score)/(aq.count+1)).toFixed(1), min: Math.min(aq.min ?? 10, score), max: Math.max(aq.max ?? 0, score) },
+                    analyses_completed: { count: ac.count+1 },
+                  }
+                })
+                setMetricHistory(prev => {
+                  const aqHist = prev.analysis_quality || []
+                  const acHist = prev.analyses_completed || []
+                  return {
+                    ...prev,
+                    analysis_quality: [...aqHist, score].slice(-10),
+                    analyses_completed: [...acHist, (acHist.length || 0) + 1].slice(-10),
+                  }
+                })
+              }
+              // Advance to results step after analysis completes
+              setTimeout(() => setTourStep(4), 500)
+            }
+            runChain()
+          }
+        }, 300)
+        break
+      case 3: // Waiting for analysis — this step auto-advances via runChain above
+        break
+      case 4: // Results → Events tab
+        setTab('events')
+        setTimeout(() => setTourStep(5), 300)
+        break
+      case 5: // Events → MLOps tab
+        setTab('mlops')
+        setTimeout(() => setTourStep(6), 300)
+        break
+      case 6: // Finish tour
+        setTourStep(-1)
+        setTourActive(false)
+        break
+      default:
+        setTourActive(false)
     }
+  }, [tourStep])
 
-    setTourStep(nextStep)
-  }, [tourStep, selectedDoc])
-
-  // Tour: ensure correct tab is shown for highlight steps
+  // Tour: ensure correct tab is shown for highlight steps (safety net)
   useEffect(() => {
-    if (!tourActive) return
+    if (!tourActive || tourStep < 0) return
     const s = TOUR_STEPS[tourStep]
     if (!s) return
-    if (s.target === 'architecture') setTab('arch')
-    if (s.target === 'doc-select' || s.target === 'run-analysis' || s.target === 'results') setTab('pipeline')
-    if (s.target === 'events-tab') setTab('events')
-    if (s.target === 'mlops-tab') setTab('mlops')
-  }, [tourStep, tourActive])
+    // Tab switching is handled by tourNext, but this is a safety net
+    if (s.target === 'architecture' && tab !== 'arch') setTab('arch')
+    if ((s.target === 'doc-select' || s.target === 'run-analysis' || s.target === 'results') && tab !== 'pipeline') setTab('pipeline')
+    if (s.target === 'events-tab' && tab !== 'events') setTab('events')
+    if (s.target === 'mlops-tab' && tab !== 'mlops') setTab('mlops')
+  }, [tourStep, tourActive, tab])
 
   // Feature 6: Live Feed Counters
   useEffect(() => {
@@ -1159,6 +1251,7 @@ export default function App() {
           setLang={setLang}
           onNext={tourNext}
           onClose={() => setTourActive(false)}
+          isAnalysisRunning={loading}
         />
       )}
     </>
